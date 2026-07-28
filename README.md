@@ -1,5 +1,10 @@
 # csvpeek
 
+[![CI](https://github.com/martin-k-m/csvpeek/actions/workflows/ci.yml/badge.svg)](https://github.com/martin-k-m/csvpeek/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-7C6CFF)](LICENSE)
+[![Zero dependencies](https://img.shields.io/badge/dependencies-0-4F8CFF)](pyproject.toml)
+
 A fast, **zero-dependency** CSV profiler for the terminal. Point it at a file and get
 column types, null counts, numeric statistics, and top values — in one glance.
 
