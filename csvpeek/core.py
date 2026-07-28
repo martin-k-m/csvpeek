@@ -9,13 +9,24 @@ from __future__ import annotations
 
 import csv
 import statistics
+from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Iterable, Sequence
+from typing import Iterable, Optional, Sequence
 
 # Values treated as "missing" regardless of column type (case-insensitive).
 NULL_TOKENS = frozenset({"", "na", "n/a", "null", "none", "nan", "nil"})
 _TRUE = frozenset({"true", "t", "yes", "y", "1"})
 _FALSE = frozenset({"false", "f", "no", "n", "0"})
+
+# Common date/time formats, tried in order. Kept small and unambiguous.
+_DATE_FORMATS = (
+    "%Y-%m-%d",
+    "%Y/%m/%d",
+    "%m/%d/%Y",
+    "%d/%m/%Y",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S",
+)
 
 
 def is_null(value: str) -> bool:
@@ -38,12 +49,25 @@ def _try_float(value: str) -> bool:
         return False
 
 
+def _try_date(value: str) -> bool:
+    # Require a separator so bare numbers (years, ids) aren't read as dates.
+    if not any(sep in value for sep in "-/:"):
+        return False
+    for fmt in _DATE_FORMATS:
+        try:
+            datetime.strptime(value, fmt)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
 def infer_type(values: Sequence[str]) -> str:
     """Infer a column type from its non-null values.
 
-    Returns one of: ``empty``, ``bool``, ``int``, ``float``, ``string``.
-    A column is numeric only if *every* non-null value parses; one stray label
-    demotes the whole column to ``string`` (no silent coercion).
+    Returns one of: ``empty``, ``bool``, ``int``, ``float``, ``date``, ``string``.
+    A column takes a specific type only if *every* non-null value fits it; one
+    stray label demotes the whole column to ``string`` (no silent coercion).
     """
     non_null = [v.strip() for v in values if not is_null(v)]
     if not non_null:
@@ -56,6 +80,8 @@ def infer_type(values: Sequence[str]) -> str:
         return "int"
     if all(_try_float(v) for v in non_null):
         return "float"
+    if all(_try_date(v) for v in non_null):
+        return "date"
     return "string"
 
 
@@ -141,11 +167,22 @@ def _profile_column(name: str, values: Sequence[str], top_n: int) -> ColumnProfi
     return col
 
 
-def profile_rows(header: Sequence[str], rows: Iterable[Sequence[str]], top_n: int = 5) -> Profile:
-    """Profile already-parsed rows against a header."""
+def profile_rows(
+    header: Sequence[str],
+    rows: Iterable[Sequence[str]],
+    top_n: int = 5,
+    limit: Optional[int] = None,
+) -> Profile:
+    """Profile already-parsed rows against a header.
+
+    ``limit`` caps how many data rows are read — useful for sampling a large
+    file. ``None`` reads everything.
+    """
     columns: list[list[str]] = [[] for _ in header]
     n_rows = 0
     for row in rows:
+        if limit is not None and n_rows >= limit:
+            break
         n_rows += 1
         for i in range(len(header)):
             columns[i].append(row[i] if i < len(row) else "")
@@ -156,12 +193,14 @@ def profile_rows(header: Sequence[str], rows: Iterable[Sequence[str]], top_n: in
     return Profile(rows=n_rows, columns=profiles)
 
 
-def profile_file(path: str, delimiter: str = ",", top_n: int = 5) -> Profile:
-    """Read a CSV file from ``path`` and profile it."""
+def profile_file(
+    path: str, delimiter: str = ",", top_n: int = 5, limit: Optional[int] = None
+) -> Profile:
+    """Read a CSV file from ``path`` and profile it (optionally sampling ``limit`` rows)."""
     with open(path, newline="", encoding="utf-8-sig") as fh:
         reader = csv.reader(fh, delimiter=delimiter)
         try:
             header = next(reader)
         except StopIteration:
             return Profile(rows=0, columns=[])
-        return profile_rows(header, reader, top_n=top_n)
+        return profile_rows(header, reader, top_n=top_n, limit=limit)

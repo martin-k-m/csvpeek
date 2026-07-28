@@ -75,6 +75,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-d", "--delimiter", default=",", help="field delimiter (default: ,)")
     p.add_argument("-t", "--top", type=int, default=5, metavar="N",
                    help="show top N values for text columns (default: 5)")
+    p.add_argument("-n", "--limit", type=int, default=None, metavar="ROWS",
+                   help="only read the first ROWS data rows (sample large files)")
     p.add_argument("--json", action="store_true", help="emit the profile as JSON")
     p.add_argument("--no-color", action="store_true", help="disable colored output")
     p.add_argument("-V", "--version", action="version", version=f"csvpeek {__version__}")
@@ -84,7 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        profile = profile_file(args.file, delimiter=args.delimiter, top_n=args.top)
+        profile = profile_file(args.file, delimiter=args.delimiter, top_n=args.top, limit=args.limit)
     except FileNotFoundError:
         print(f"csvpeek: file not found: {args.file}", file=sys.stderr)
         return 2

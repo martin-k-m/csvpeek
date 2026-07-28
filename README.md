@@ -45,6 +45,7 @@ python -m csvpeek data.csv
 csvpeek data.csv                 # profile a CSV
 csvpeek data.tsv -d $'\t'        # tab-separated
 csvpeek data.csv --top 10        # more top values for text columns
+csvpeek big.csv -n 10000         # sample the first 10k rows of a large file
 csvpeek data.csv --json          # machine-readable output
 csvpeek data.csv --no-color      # plain text
 ```
@@ -53,15 +54,17 @@ csvpeek data.csv --no-color      # plain text
 | :-- | :-- |
 | `-d`, `--delimiter` | Field delimiter (default `,`) |
 | `-t`, `--top N` | Show top *N* values for text columns (default 5) |
+| `-n`, `--limit ROWS` | Only read the first *ROWS* data rows (sample large files) |
 | `--json` | Emit the full profile as JSON |
 | `--no-color` | Disable colored output |
 | `-V`, `--version` | Print version |
 
 ## What it computes
 
-- **Type inference** per column — `int`, `float`, `bool`, `string`, or `empty`. A column
-  is numeric only if *every* non-null value parses; one stray label keeps it a string
-  (no silent coercion).
+- **Type inference** per column — `int`, `float`, `bool`, `date`, `string`, or `empty`. A
+  column takes a type only if *every* non-null value fits; one stray label keeps it a
+  string (no silent coercion). Dates require a separator (`2024-01-01`, `01/02/2024`), so
+  bare years and ids stay numeric.
 - **Nulls** — empty, `NA`, `N/A`, `null`, `none`, `nan`, `nil` (case-insensitive), with a
   percentage.
 - **Numeric columns** — min, max, mean, median, and population standard deviation.

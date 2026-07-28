@@ -56,6 +56,30 @@ def test_null_pct():
     assert col.nulls == 2 and col.null_pct == 50.0
 
 
+def test_infer_type_date():
+    assert infer_type(["2024-01-01", "2024-12-31"]) == "date"
+    assert infer_type(["01/02/2024", "12/31/2024"]) == "date"
+    assert infer_type(["2024-01-01T09:30:00"]) == "date"
+    # bare numbers must NOT be read as dates
+    assert infer_type(["2024", "2025"]) == "int"
+    # one non-date value demotes to string
+    assert infer_type(["2024-01-01", "sometime"]) == "string"
+
+
+def test_limit_caps_rows():
+    header = ["x"]
+    rows = [["1"], ["2"], ["3"], ["4"], ["5"]]
+    prof = profile_rows(header, rows, limit=2)
+    assert prof.rows == 2
+    assert prof.columns[0].count == 2
+
+
+def test_limit_none_reads_all():
+    header = ["x"]
+    rows = [["1"], ["2"], ["3"]]
+    assert profile_rows(header, rows, limit=None).rows == 3
+
+
 def test_profile_file_roundtrip(tmp_path):
     p = tmp_path / "data.csv"
     with open(p, "w", newline="", encoding="utf-8") as fh:
