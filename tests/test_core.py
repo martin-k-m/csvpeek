@@ -29,6 +29,27 @@ def test_profile_rows_numeric_stats():
     assert col.count == 3 and col.nulls == 1
     assert col.minimum == 10 and col.maximum == 30
     assert col.mean == 20 and col.median == 20
+    # quartiles (exclusive method): [10,20,30] -> q1=10, q3=30
+    assert col.p25 == 10 and col.p75 == 30
+
+
+def test_quartiles_need_two_values():
+    col = profile_rows(["x"], [["5"]]).columns[0]
+    assert col.p25 is None and col.p75 is None
+
+
+def test_sniff_delimiter():
+    from csvpeek.core import sniff_delimiter
+    assert sniff_delimiter("a;b;c\n1;2;3\n4;5;6") == ";"
+    assert sniff_delimiter("a\tb\n1\t2\n3\t4") == "\t"
+
+
+def test_profile_file_autodetects_semicolon(tmp_path):
+    p = tmp_path / "semi.csv"
+    p.write_text("a;b\n1;2\n3;4\n", encoding="utf-8")
+    prof = profile_file(str(p))  # no delimiter passed
+    assert [c.name for c in prof.columns] == ["a", "b"]
+    assert prof.rows == 2
 
 
 def test_profile_rows_categorical_top_is_deterministic():

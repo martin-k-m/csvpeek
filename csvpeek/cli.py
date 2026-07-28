@@ -46,9 +46,9 @@ def render(profile: Profile, use_color: bool) -> str:
     for col in profile.columns:
         if col.dtype in ("int", "float"):
             summary = (
-                f"min {_fmt_num(col.minimum)} · max {_fmt_num(col.maximum)} · "
-                f"mean {_fmt_num(col.mean)} · median {_fmt_num(col.median)} · "
-                f"sd {_fmt_num(col.stdev)}"
+                f"min {_fmt_num(col.minimum)} · p25 {_fmt_num(col.p25)} · "
+                f"median {_fmt_num(col.median)} · p75 {_fmt_num(col.p75)} · "
+                f"max {_fmt_num(col.maximum)} · mean {_fmt_num(col.mean)} · sd {_fmt_num(col.stdev)}"
             )
         elif col.top:
             summary = ", ".join(f"{v} ({n})" for v, n in col.top)
@@ -72,7 +72,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="Profile a CSV file from the terminal — types, nulls, and stats. Zero dependencies.",
     )
     p.add_argument("file", help="path to a CSV file")
-    p.add_argument("-d", "--delimiter", default=",", help="field delimiter (default: ,)")
+    p.add_argument("-d", "--delimiter", default=None,
+                   help="field delimiter (default: auto-detect , ; tab |)")
     p.add_argument("-t", "--top", type=int, default=5, metavar="N",
                    help="show top N values for text columns (default: 5)")
     p.add_argument("-n", "--limit", type=int, default=None, metavar="ROWS",

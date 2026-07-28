@@ -98,6 +98,8 @@ class ColumnProfile:
     mean: float | None = None
     median: float | None = None
     stdev: float | None = None
+    p25: float | None = None
+    p75: float | None = None
     # string/bool: most common values as (value, count), descending then by value
     top: list[tuple[str, int]] = field(default_factory=list)
 
@@ -128,6 +130,8 @@ class Profile:
                     "mean": c.mean,
                     "median": c.median,
                     "stdev": c.stdev,
+                    "p25": c.p25,
+                    "p75": c.p75,
                     "top": [{"value": v, "count": n} for v, n in c.top],
                 }
                 for c in self.columns
@@ -156,6 +160,10 @@ def _profile_column(name: str, values: Sequence[str], top_n: int) -> ColumnProfi
         col.mean = round(statistics.fmean(nums), 4)
         col.median = statistics.median(nums)
         col.stdev = round(statistics.pstdev(nums), 4) if len(nums) > 1 else 0.0
+        if len(nums) >= 2:
+            q1, _, q3 = statistics.quantiles(nums, n=4)  # exclusive method (default)
+            col.p25 = round(q1, 4)
+            col.p75 = round(q3, 4)
     elif present:
         counts: dict[str, int] = {}
         for v in present:
@@ -193,11 +201,26 @@ def profile_rows(
     return Profile(rows=n_rows, columns=profiles)
 
 
+def sniff_delimiter(sample: str) -> str:
+    """Guess a delimiter from a text sample; fall back to comma."""
+    try:
+        return csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
+    except csv.Error:
+        return ","
+
+
 def profile_file(
-    path: str, delimiter: str = ",", top_n: int = 5, limit: Optional[int] = None
+    path: str, delimiter: Optional[str] = None, top_n: int = 5, limit: Optional[int] = None
 ) -> Profile:
-    """Read a CSV file from ``path`` and profile it (optionally sampling ``limit`` rows)."""
+    """Read a CSV file from ``path`` and profile it.
+
+    ``delimiter`` defaults to auto-detection (comma/semicolon/tab/pipe).
+    ``limit`` optionally samples only the first N data rows.
+    """
     with open(path, newline="", encoding="utf-8-sig") as fh:
+        if delimiter is None:
+            delimiter = sniff_delimiter(fh.read(8192))
+            fh.seek(0)
         reader = csv.reader(fh, delimiter=delimiter)
         try:
             header = next(reader)

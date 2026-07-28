@@ -19,10 +19,10 @@ $ csvpeek examples/people.csv
   column  type      nulls  unique  summary
   ─────────────────────────────────────────────────────────────────────
   name    string        0       6  Ann (1), Bob (1), Cara (1), Dan (1), Eve (1)
-  age     int      1 (16.7%)     5  min 22 · max 41 · mean 31 · median 29 · sd 6.2929
+  age     int      1 (16.7%)     5  min 22 · p25 25.5 · median 29 · p75 37.5 · max 41 · mean 31 · sd 6.2929
   city    string        0       3  Santa Cruz (3), Brentwood (2), Oakland (1)
   active  bool          0       2  true (4), false (2)
-  score   float    1 (16.7%)     5  min 6.5 · max 9.4 · mean 8.16 · median 8.8 · sd 1.143
+  score   float    1 (16.7%)     5  min 6.5 · p25 6.8 · median 8.8 · p75 9.2 · max 9.4 · mean 8.16 · sd 1.143
 ```
 
 ## Install
@@ -52,7 +52,7 @@ csvpeek data.csv --no-color      # plain text
 
 | Flag | Description |
 | :-- | :-- |
-| `-d`, `--delimiter` | Field delimiter (default `,`) |
+| `-d`, `--delimiter` | Field delimiter (default: auto-detect `,` `;` tab `\|`) |
 | `-t`, `--top N` | Show top *N* values for text columns (default 5) |
 | `-n`, `--limit ROWS` | Only read the first *ROWS* data rows (sample large files) |
 | `--json` | Emit the full profile as JSON |
@@ -67,7 +67,8 @@ csvpeek data.csv --no-color      # plain text
   bare years and ids stay numeric.
 - **Nulls** — empty, `NA`, `N/A`, `null`, `none`, `nan`, `nil` (case-insensitive), with a
   percentage.
-- **Numeric columns** — min, max, mean, median, and population standard deviation.
+- **Numeric columns** — min, 25th/50th/75th percentiles, max, mean, and population
+  standard deviation.
 - **Text/bool columns** — unique count and the most common values (ties broken
   alphabetically, so runs are reproducible).
 
