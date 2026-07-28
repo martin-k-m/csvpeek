@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "csvpeek"
+version = "0.1.0"
+description = "A fast, zero-dependency CSV profiler for the terminal — types, nulls, and stats."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Martin Muskov", email = "martin@credda.io" }]
+keywords = ["csv", "data", "profiling", "cli", "eda", "statistics"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Environment :: Console",
+    "Topic :: Utilities",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/martin-k-m/csvpeek"
+Repository = "https://github.com/martin-k-m/csvpeek"
+
+[project.scripts]
+csvpeek = "csvpeek.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["csvpeek"]

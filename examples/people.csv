@@ -1,0 +1,7 @@
+name,age,city,active,score
+Ann,29,Santa Cruz,true,9.4
+Bob,34,Brentwood,false,7.1
+Cara,,Santa Cruz,true,8.8
+Dan,41,Oakland,true,
+Eve,29,Brentwood,false,6.5
+Finn,22,Santa Cruz,true,9.0
