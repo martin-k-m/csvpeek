@@ -9,7 +9,7 @@ description = "A fast, zero-dependency CSV profiler for the terminal — types, 
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-authors = [{ name = "Martin Muskov", email = "martin@credda.io" }]
+authors = [{ name = "Martin Muskov", email = "martinkmuskov@gmail.com" }]
 keywords = ["csv", "data", "profiling", "cli", "eda", "statistics"]
 classifiers = [
     "Programming Language :: Python :: 3",
