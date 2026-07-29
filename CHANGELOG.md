@@ -6,6 +6,9 @@ All notable changes to csvpeek are documented here. This project follows
 ## [Unreleased]
 
 ### Added
+- **Markdown output** (`--format md`) — render the profile as a Markdown table you
+  can paste straight into a pull request or doc. `--format` also accepts `table`
+  (default) and `json`; `--json` is now a shortcut for `--format json`.
 - Date-type detection (`date` dtype), separator-guarded so bare years/ids stay numeric.
 - `-n`/`--limit` flag to sample only the first N rows of large files.
 - Quartiles (25th/75th percentile) for numeric columns.
