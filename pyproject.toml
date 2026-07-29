@@ -17,6 +17,7 @@ classifiers = [
     "Environment :: Console",
     "Topic :: Utilities",
     "Topic :: Scientific/Engineering :: Information Analysis",
+    "Typing :: Typed",
 ]
 dependencies = []
 
