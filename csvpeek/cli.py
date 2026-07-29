@@ -7,7 +7,7 @@ import json
 import sys
 
 from . import __version__
-from .core import Profile, profile_file
+from .core import ColumnProfile, Profile, profile_file
 
 # ANSI helpers (disabled when not a TTY or --no-color)
 _ACCENT = "\033[38;5;99m"
@@ -30,6 +30,23 @@ def _fmt_num(n) -> str:
     return str(n)
 
 
+def _column_summary(col: ColumnProfile) -> str:
+    """The one-line, color-free summary for a column (shared by all renderers)."""
+    if col.dtype in ("int", "float"):
+        return (
+            f"min {_fmt_num(col.minimum)} · p25 {_fmt_num(col.p25)} · "
+            f"median {_fmt_num(col.median)} · p75 {_fmt_num(col.p75)} · "
+            f"max {_fmt_num(col.maximum)} · mean {_fmt_num(col.mean)} · sd {_fmt_num(col.stdev)}"
+        )
+    if col.top:
+        return ", ".join(f"{v} ({n})" for v, n in col.top)
+    return "(empty)"
+
+
+def _nulls_cell(col: ColumnProfile) -> str:
+    return f"{col.nulls} ({col.null_pct}%)" if col.nulls else "0"
+
+
 def render(profile: Profile, use_color: bool) -> str:
     c = _paint(use_color)
     out: list[str] = []
@@ -44,24 +61,39 @@ def render(profile: Profile, use_color: bool) -> str:
     out.append(c("  " + "─" * (len(header) - 2), _DIM))
 
     for col in profile.columns:
-        if col.dtype in ("int", "float"):
-            summary = (
-                f"min {_fmt_num(col.minimum)} · p25 {_fmt_num(col.p25)} · "
-                f"median {_fmt_num(col.median)} · p75 {_fmt_num(col.p75)} · "
-                f"max {_fmt_num(col.maximum)} · mean {_fmt_num(col.mean)} · sd {_fmt_num(col.stdev)}"
-            )
-        elif col.top:
-            summary = ", ".join(f"{v} ({n})" for v, n in col.top)
-        else:
-            summary = c("(empty)", _DIM)
-
-        nulls = f"{col.nulls} ({col.null_pct}%)" if col.nulls else "0"
+        summary = _column_summary(col)
+        if summary == "(empty)":
+            summary = c(summary, _DIM)
         line = (
             f"  {c(col.name.ljust(name_w), _ACCENT)}  "
-            f"{col.dtype:<7} {nulls:>7} {col.unique:>7}  {summary}"
+            f"{col.dtype:<7} {_nulls_cell(col):>7} {col.unique:>7}  {summary}"
         )
         out.append(line)
 
+    out.append("")
+    return "\n".join(out)
+
+
+def _md_escape(text: str) -> str:
+    """Escape characters that would break a Markdown table cell."""
+    return text.replace("\\", "\\\\").replace("|", "\\|")
+
+
+def render_markdown(profile: Profile) -> str:
+    """Render the profile as a Markdown document — a table you can paste into a PR."""
+    out: list[str] = [
+        "# CSV profile",
+        "",
+        f"**{profile.rows} rows × {len(profile.columns)} columns**",
+        "",
+        "| Column | Type | Nulls | Unique | Summary |",
+        "| --- | --- | ---: | ---: | --- |",
+    ]
+    for col in profile.columns:
+        out.append(
+            f"| `{_md_escape(col.name)}` | {col.dtype} | {_nulls_cell(col)} | "
+            f"{col.unique} | {_md_escape(_column_summary(col))} |"
+        )
     out.append("")
     return "\n".join(out)
 
@@ -78,7 +110,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="show top N values for text columns (default: 5)")
     p.add_argument("-n", "--limit", type=int, default=None, metavar="ROWS",
                    help="only read the first ROWS data rows (sample large files)")
-    p.add_argument("--json", action="store_true", help="emit the profile as JSON")
+    p.add_argument("--format", choices=["table", "md", "json"], default="table",
+                   help="output format: table (default), md (Markdown), or json")
+    p.add_argument("--json", action="store_true", help="shortcut for --format json")
     p.add_argument("--no-color", action="store_true", help="disable colored output")
     p.add_argument("-V", "--version", action="version", version=f"csvpeek {__version__}")
     return p
@@ -95,12 +129,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"csvpeek: could not read {args.file}: {exc}", file=sys.stderr)
         return 2
 
-    if args.json:
+    fmt = "json" if args.json else args.format
+    if fmt == "json":
         print(json.dumps(profile.to_dict(), indent=2))
-        return 0
-
-    use_color = sys.stdout.isatty() and not args.no_color
-    print(render(profile, use_color))
+    elif fmt == "md":
+        print(render_markdown(profile))
+    else:
+        use_color = sys.stdout.isatty() and not args.no_color
+        print(render(profile, use_color))
     return 0
 
 

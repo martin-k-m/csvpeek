@@ -46,6 +46,7 @@ csvpeek data.csv                 # profile a CSV
 csvpeek data.tsv -d $'\t'        # tab-separated
 csvpeek data.csv --top 10        # more top values for text columns
 csvpeek big.csv -n 10000         # sample the first 10k rows of a large file
+csvpeek data.csv --format md     # a Markdown table to paste into a PR
 csvpeek data.csv --json          # machine-readable output
 csvpeek data.csv --no-color      # plain text
 ```
@@ -55,7 +56,8 @@ csvpeek data.csv --no-color      # plain text
 | `-d`, `--delimiter` | Field delimiter (default: auto-detect `,` `;` tab `\|`) |
 | `-t`, `--top N` | Show top *N* values for text columns (default 5) |
 | `-n`, `--limit ROWS` | Only read the first *ROWS* data rows (sample large files) |
-| `--json` | Emit the full profile as JSON |
+| `--format {table,md,json}` | Output format: `table` (default), `md` (Markdown), or `json` |
+| `--json` | Shortcut for `--format json` |
 | `--no-color` | Disable colored output |
 | `-V`, `--version` | Print version |
 
