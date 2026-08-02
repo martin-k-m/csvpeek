@@ -1,7 +1,26 @@
+import csv
+import io
 import json
+import sys
+
+import pytest
 
 from csvpeek.cli import main, render_markdown
 from csvpeek.core import profile_rows
+
+
+def _run(monkeypatch, argv, encoding):
+    """Run the CLI against a stdout that encodes as ``encoding``.
+
+    A real cp1252 console is what breaks on Windows; this reproduces it without
+    needing one. Returns ``(exit_code, decoded_output)``.
+    """
+    buf = io.BytesIO()
+    stream = io.TextIOWrapper(buf, encoding=encoding, newline="\n")
+    monkeypatch.setattr(sys, "stdout", stream)
+    code = main(argv)
+    stream.flush()
+    return code, buf.getvalue().decode(encoding)
 
 
 def test_render_markdown_structure():
@@ -56,3 +75,80 @@ def test_main_missing_file_returns_2(capsys):
     assert main(["does-not-exist.csv"]) == 2
     err = capsys.readouterr().err
     assert "file not found" in err
+
+
+def test_table_falls_back_to_ascii_on_cp1252_stdout(monkeypatch, tmp_path):
+    # A cp1252 console cannot encode the box rule, and used to die printing it.
+    path = tmp_path / "d.csv"
+    path.write_text("a,b\n1,2\n3,4\n", encoding="utf-8")
+
+    code, out = _run(monkeypatch, [str(path), "--no-color"], "cp1252")
+
+    assert code == 0
+    assert "2 rows x 2 columns" in out
+    assert "----" in out
+    assert not any(ch in out for ch in "─×·")
+
+
+def test_table_keeps_box_characters_on_utf8_stdout(monkeypatch, tmp_path):
+    path = tmp_path / "d.csv"
+    path.write_text("a,b\n1,2\n3,4\n", encoding="utf-8")
+
+    code, out = _run(monkeypatch, [str(path), "--no-color"], "utf-8")
+
+    assert code == 0
+    assert "2 rows × 2 columns" in out
+    assert "─" in out and " · " in out
+
+
+def test_markdown_falls_back_to_ascii_on_cp1252_stdout(monkeypatch, tmp_path):
+    # cp1252 can encode × and ·, but writing them there produces mojibake in a
+    # Markdown file everything else reads as UTF-8.
+    path = tmp_path / "d.csv"
+    path.write_text("a,b\n1,2\n3,4\n", encoding="utf-8")
+
+    code, out = _run(monkeypatch, [str(path), "--format", "md"], "cp1252")
+
+    assert code == 0
+    assert "2 rows x 2 columns" in out
+    assert not any(ch in out for ch in "─×·")
+
+
+def test_values_the_stream_cannot_encode_are_escaped_not_fatal(monkeypatch, tmp_path):
+    path = tmp_path / "cjk.csv"
+    path.write_text("name\n東京\n大阪\n", encoding="utf-8")
+
+    code, out = _run(monkeypatch, [str(path), "--no-color"], "cp1252")
+
+    assert code == 0
+    assert "\\u6771\\u4eac" in out
+
+
+def test_non_utf8_file_exits_3(capsys, tmp_path):
+    path = tmp_path / "latin1.csv"
+    path.write_bytes("name,city\nJosé,Málaga\n".encode("cp1252"))
+
+    assert main([str(path)]) == 3
+    err = capsys.readouterr().err
+    assert "is not UTF-8 text" in err
+    assert "0xe9" in err
+
+
+def test_oversized_field_exits_3(capsys, tmp_path):
+    path = tmp_path / "big.csv"
+    path.write_text("a,b\n" + "x" * (csv.field_size_limit() + 1) + ",1\n", encoding="utf-8")
+
+    assert main([str(path)]) == 3
+    err = capsys.readouterr().err
+    assert "could not be parsed as CSV" in err
+    assert "field larger than field limit" in err
+
+
+@pytest.mark.parametrize("value", ["inf", "-Infinity", "1e999"])
+def test_non_finite_value_exits_3(capsys, tmp_path, value):
+    path = tmp_path / "inf.csv"
+    path.write_text(f"v\n1\n{value}\n", encoding="utf-8")
+
+    assert main([str(path), "--json"]) == 3
+    err = capsys.readouterr().err
+    assert "column 'v' contains a value that is not a finite number" in err

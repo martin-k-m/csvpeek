@@ -8,6 +8,7 @@ could compute by hand from the column.
 from __future__ import annotations
 
 import csv
+import math
 import statistics
 from datetime import datetime
 from dataclasses import dataclass, field
@@ -27,6 +28,14 @@ _DATE_FORMATS = (
     "%Y-%m-%dT%H:%M:%S",
     "%Y-%m-%d %H:%M:%S",
 )
+
+
+class ProfileError(Exception):
+    """The input is readable but cannot be profiled as it stands.
+
+    Separate from ``OSError``: the file was opened fine, its *contents* are the
+    problem, which is a different thing for a caller to react to.
+    """
 
 
 def is_null(value: str) -> bool:
@@ -139,6 +148,41 @@ class Profile:
         }
 
 
+def _reject_non_finite(name: str, present: Sequence[str], nums: Sequence[float]) -> None:
+    """Refuse a numeric column holding an infinity.
+
+    ``inf``, ``-infinity`` and integers too large for a float all parse happily
+    and then break ``statistics`` a few lines later. There is also no honest
+    answer to report: the standard deviation of an infinite value is undefined,
+    and JSON has no literal for it, so ``--json`` would emit something no strict
+    parser accepts. Saying so is better than either.
+    """
+    for raw, num in zip(present, nums):
+        if not math.isfinite(num):
+            shown = raw if len(raw) <= 32 else raw[:32] + "..."
+            raise ProfileError(
+                f"column {name!r} contains a value that is not a finite number: {shown}"
+            )
+
+
+def _finite(name: str, stat: str, value: float) -> float:
+    """Refuse a computed statistic that is not finite.
+
+    ``_reject_non_finite`` checks what was parsed out of the file. This checks
+    what came back out of ``statistics``, which is a different problem: a column
+    of ``1e308`` and ``-1e308`` is entirely finite on the way in and still
+    produces an infinite spread and infinite quartiles. Emitting those would put
+    a bare ``Infinity`` in ``--json``, which no strict parser accepts, so the
+    documented ``--json | jq`` pipeline would break at exit 0.
+    """
+    if not math.isfinite(value):
+        raise ProfileError(
+            f"column {name!r} has a {stat} that is not a finite number; "
+            "the values are too spread out to summarise"
+        )
+    return value
+
+
 def _profile_column(name: str, values: Sequence[str], top_n: int) -> ColumnProfile:
     nulls = sum(1 for v in values if is_null(v))
     present = [v.strip() for v in values if not is_null(v)]
@@ -155,15 +199,30 @@ def _profile_column(name: str, values: Sequence[str], top_n: int) -> ColumnProfi
 
     if dtype in ("int", "float") and present:
         nums = [float(v) for v in present]
-        col.minimum = min(nums)
-        col.maximum = max(nums)
-        col.mean = round(statistics.fmean(nums), 4)
-        col.median = statistics.median(nums)
-        col.stdev = round(statistics.pstdev(nums), 4) if len(nums) > 1 else 0.0
-        if len(nums) >= 2:
-            q1, _, q3 = statistics.quantiles(nums, n=4)  # exclusive method (default)
-            col.p25 = round(q1, 4)
-            col.p75 = round(q3, 4)
+        _reject_non_finite(name, present, nums)
+        try:
+            col.minimum = min(nums)
+            col.maximum = max(nums)
+            col.mean = _finite(name, "mean", statistics.fmean(nums))
+            col.median = _finite(name, "median", statistics.median(nums))
+            col.stdev = (
+                _finite(name, "stdev", statistics.pstdev(nums)) if len(nums) > 1 else 0.0
+            )
+            if len(nums) >= 2:
+                q1, _, q3 = statistics.quantiles(nums, n=4)  # exclusive method (default)
+                col.p25 = _finite(name, "p25", q1)
+                col.p75 = _finite(name, "p75", q3)
+        except OverflowError as exc:
+            # fsum raises this rather than returning inf. Values near the top of
+            # the float range are individually finite, so the input guard above
+            # passes them and the sum is what overflows.
+            raise ProfileError(
+                f"column {name!r} has values too large to summarise: {exc}"
+            ) from exc
+        col.mean = None if col.mean is None else round(col.mean, 4)
+        col.stdev = None if col.stdev is None else round(col.stdev, 4)
+        col.p25 = None if col.p25 is None else round(col.p25, 4)
+        col.p75 = None if col.p75 is None else round(col.p75, 4)
     elif present:
         counts: dict[str, int] = {}
         for v in present:
@@ -216,14 +275,35 @@ def profile_file(
 
     ``delimiter`` defaults to auto-detection (comma/semicolon/tab/pipe).
     ``limit`` optionally samples only the first N data rows.
+
+    Raises ``ProfileError`` when the bytes are not UTF-8, or when the CSV module
+    refuses the file (an unterminated quote, or a field past its size limit).
     """
-    with open(path, newline="", encoding="utf-8-sig") as fh:
-        if delimiter is None:
-            delimiter = sniff_delimiter(fh.read(8192))
-            fh.seek(0)
-        reader = csv.reader(fh, delimiter=delimiter)
-        try:
-            header = next(reader)
-        except StopIteration:
-            return Profile(rows=0, columns=[])
-        return profile_rows(header, reader, top_n=top_n, limit=limit)
+    try:
+        with open(path, newline="", encoding="utf-8-sig") as fh:
+            if delimiter is None:
+                delimiter = sniff_delimiter(fh.read(8192))
+                fh.seek(0)
+            try:
+                reader = csv.reader(fh, delimiter=delimiter)
+            except TypeError as exc:
+                # csv rejects a delimiter that is not exactly one character with
+                # a TypeError, not a csv.Error, so the handler below misses it.
+                # -d ";;" is a user typo and should read as one, not as a crash.
+                raise ProfileError(
+                    f"delimiter must be a single character, got {delimiter!r}"
+                ) from exc
+            try:
+                header = next(reader)
+            except StopIteration:
+                return Profile(rows=0, columns=[])
+            return profile_rows(header, reader, top_n=top_n, limit=limit)
+    except UnicodeDecodeError as exc:
+        bad = exc.object[exc.start]
+        raise ProfileError(
+            f"{path} is not UTF-8 text (byte 0x{bad:02x} is not valid there); "
+            "convert it to UTF-8 first"
+        ) from exc
+    except csv.Error as exc:
+        # The reader is consumed inside the ``with``, so its errors surface here.
+        raise ProfileError(f"{path} could not be parsed as CSV: {exc}") from exc

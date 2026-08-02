@@ -5,6 +5,34 @@ All notable changes to csvpeek are documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+- Statistics computed from finite values are now checked for finiteness too. A
+  column of values near the float maximum overflowed inside `fsum` and escaped as
+  a traceback, and a column spanning `1e308` to `-1e308` produced infinite
+  quartiles that went into `--json` as bare `Infinity`, which no strict parser
+  accepts, at exit 0.
+- `-d ";;"` is reported as a user error rather than raising `TypeError` from
+  inside the CSV reader.
+- Closing the pipe early, as in `csvpeek --json | head -1`, exits quietly instead
+  of printing a `BrokenPipeError` traceback.
+- Default table output no longer dies with `UnicodeEncodeError` on a console that
+  cannot encode its box characters, which is any Windows console without
+  `PYTHONUTF8=1`. csvpeek now checks what stdout can encode and falls back to
+  `-`, `x` and `|`. The same check applies to `--format md`, which previously
+  wrote `×` and `·` as cp1252 bytes into a file everything else reads as UTF-8.
+- Values and column names the output stream cannot encode are escaped as
+  `\uXXXX` instead of aborting the run.
+
+### Added
+- Exit code `3` for a file that reads but cannot be profiled: not UTF-8, refused
+  by the CSV reader (a field past the 131072-byte limit), or a numeric column
+  holding a non-finite value such as `inf`. Each prints a readable reason on
+  stderr. All three previously escaped as a traceback and exit `1`, which is now
+  left to mean csvpeek itself failed.
+- `ProfileError`, raised by `profile_file` and `profile_rows` for the same three
+  cases, so library callers can catch them without matching on `_csv.Error` or
+  `AttributeError`.
+
 ## [0.2.0] - 2026-08-02
 
 ### Added

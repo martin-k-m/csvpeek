@@ -38,6 +38,21 @@ values are escaped so a stray character cannot break the table.
 The table layout is for humans and may change. See
 [api.md](api.md#json-shape) for the schema.
 
+### Characters and encoding
+
+`table` and `md` use three non-ASCII characters: `─` for the rule, `×` between
+the row and column counts, and `·` between statistics. csvpeek asks stdout what
+it can encode before printing, and swaps all three for `-`, `x` and `|` when the
+answer is no. A cp1252 console, which is the Windows default without
+`PYTHONUTF8=1`, therefore gets a plain ASCII table rather than a crash, and a
+Markdown file written there is ASCII rather than mojibake. Set `PYTHONUTF8=1` or
+`PYTHONIOENCODING=utf-8` to keep the original characters.
+
+Values and column names come from the file and can be anything. Those the stream
+cannot encode are escaped as `\uXXXX` instead of ending the run, so the value is
+still visible even on a console that cannot draw it. `json` output is ASCII-only
+in every case.
+
 ## Examples
 
 ```sh
@@ -61,11 +76,31 @@ should be complete has gone sparse.
 | `0` | The file was profiled and the result printed |
 | `2` | The file does not exist, or could not be read |
 | `2` | Invalid arguments (argparse) |
+| `3` | The file was read, but its contents cannot be profiled |
 
-A malformed CSV is not an error. csvpeek reads what is there: rows shorter than
-the header are padded with empty values, which then count as nulls. A file whose
-header row is missing entirely, meaning a completely empty file, profiles as zero
-rows and zero columns rather than failing.
+Exit `3` covers these cases, each reported on stderr with the reason:
+
+- the bytes are not UTF-8, for example a spreadsheet saved as cp1252
+- Python's CSV reader refuses the file, most often a field past its 131072-byte
+  size limit
+- a numeric column contains a value that is not finite, such as `inf` or an
+  integer too large to hold as a float
+- a numeric column is finite but cannot be summarised: values near the top of the
+  float range overflow when summed, and a column holding both `1e308` and
+  `-1e308` has an infinite spread, so its quartiles are infinite
+- `-d/--delimiter` was given something other than a single character
+
+The last two matter for `--json` in particular. There is no JSON literal for
+infinity, so emitting one would hand `jq` output it refuses to parse while the
+exit code still said everything was fine.
+
+`1` is left to mean csvpeek itself fell over, so a check that treats a non-zero
+exit as failure can still tell a bad file apart from a bug.
+
+Most malformed CSV is not an error. csvpeek reads what is there: rows shorter
+than the header are padded with empty values, which then count as nulls. A file
+whose header row is missing entirely, meaning a completely empty file, profiles
+as zero rows and zero columns rather than failing.
 
 ## Sampling large files
 

@@ -28,13 +28,19 @@ Read and profile a CSV file.
 | `limit` | Read only the first N data rows. `None` reads everything |
 
 Raises `FileNotFoundError` if the path does not exist, and `OSError` for other
-read failures. A file with no header row returns `Profile(rows=0, columns=[])`.
+read failures. Raises [`ProfileError`](#profileerror) if the file opens but
+cannot be profiled: the bytes are not UTF-8, the CSV reader refuses them, or a
+numeric column holds a non-finite value. A file with no header row returns
+`Profile(rows=0, columns=[])`.
 
 ### `profile_rows(header, rows, top_n=5, limit=None) -> Profile`
 
 Profile rows you have already parsed. `header` is a sequence of column names and
 `rows` is any iterable of sequences: a `csv.reader`, a list of lists, or a
 generator. Use this when the data is not a file on disk.
+
+Raises [`ProfileError`](#profileerror) if a numeric column contains a value that
+is not finite.
 
 ### `infer_type(values) -> str`
 
@@ -58,6 +64,22 @@ The frozen set of strings treated as missing. Exported so you can check what
 csvpeek considers null rather than reimplementing the list.
 
 ## Types
+
+### `ProfileError`
+
+Raised when the input is readable but cannot be profiled. It is a plain
+`Exception`, deliberately not an `OSError`: the file opened fine and its
+*contents* are the problem, which is a different thing to react to. The message
+says which file or column, and why.
+
+```python
+from csvpeek import ProfileError, profile_file
+
+try:
+    profile = profile_file("export.csv")
+except ProfileError as exc:
+    print(f"skipping: {exc}")
+```
 
 ### `Profile`
 

@@ -7,7 +7,10 @@ over the same file produce identical output.
 ## Reading the file
 
 The file is opened with the `utf-8-sig` encoding, so a UTF-8 byte-order mark left
-by Excel is consumed rather than becoming part of the first column's name.
+by Excel is consumed rather than becoming part of the first column's name. A file
+that is not UTF-8, a `cp1252` export being the usual case, is reported as such
+and exits `3`. csvpeek does not guess at a legacy encoding, because guessing
+wrong renames columns and corrupts values without telling you.
 
 Without `-d`, the delimiter is sniffed from the first 8192 bytes using Python's
 `csv.Sniffer`, restricted to `,` `;` tab and `|`. If sniffing fails, which it
@@ -95,6 +98,13 @@ Two details matter if you compare csvpeek against another tool.
 `stdev` is the **population** deviation, not the sample one. It divides by *n*,
 not *n − 1*. A column with exactly one value reports `0.0` rather than being
 undefined.
+
+A numeric column containing a value that is not finite, `inf`, `-Infinity`,
+`1e999`, or an integer too large to hold as a float, is **rejected** rather than
+profiled: csvpeek reports the column and exits `3`. The standard deviation of an
+infinite value is undefined, and JSON has no literal for it, so any answer here
+would be either wrong or unparseable. Note that `nan` is a null token, so it is
+counted as missing and never reaches this check.
 
 `p25` and `p75` use Python's default **exclusive** quantile method, which
 interpolates and can therefore fall outside the range spanned by a small sample's

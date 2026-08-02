@@ -5,15 +5,88 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from typing import NamedTuple, Optional, TextIO
 
 from . import __version__
-from .core import ColumnProfile, Profile, profile_file
+from .core import ColumnProfile, Profile, ProfileError, profile_file
 
 # ANSI helpers (disabled when not a TTY or --no-color)
 _ACCENT = "\033[38;5;99m"
 _DIM = "\033[2m"
 _BOLD = "\033[1m"
 _RESET = "\033[0m"
+
+# Exit codes. 1 is left alone so it keeps meaning "csvpeek itself fell over",
+# which a CI gate can tell apart from a file it could not profile.
+_EXIT_BAD_INPUT = 2      # missing/unreadable file, or bad arguments (argparse)
+_EXIT_BAD_CONTENT = 3    # the file opened, but its contents cannot be profiled
+
+
+class Glyphs(NamedTuple):
+    """The non-ASCII characters the table layout leans on.
+
+    Grouped so they can be swapped for ASCII wholesale when the output stream
+    cannot encode them, rather than each one crashing at print time.
+    """
+
+    rule: str
+    times: str
+    dot: str
+
+
+UNICODE_GLYPHS = Glyphs(rule="─", times="×", dot="·")
+ASCII_GLYPHS = Glyphs(rule="-", times="x", dot="|")
+
+
+def _stream_encoding(stream: TextIO) -> Optional[str]:
+    """The codec ``stream`` encodes to, or ``None`` for an in-memory buffer."""
+    enc = getattr(stream, "encoding", None)
+    return enc if isinstance(enc, str) else None
+
+
+def glyphs_for(stream: TextIO) -> Glyphs:
+    """Pick the richest glyph set ``stream`` can actually encode.
+
+    A cp1252 console (the Windows default without ``PYTHONUTF8``) has no box
+    drawing characters, so assuming UTF-8 kills the default output entirely.
+    The set moves as a whole rather than per character: cp1252 does have ``×``
+    and ``·``, but emitting them there writes cp1252 bytes into output that is
+    read back as UTF-8, which is how ``--format md`` produced mojibake.
+    A stream with no declared encoding holds ``str`` and takes anything.
+    """
+    enc = _stream_encoding(stream)
+    if enc is None:
+        return UNICODE_GLYPHS
+    try:
+        "".join(UNICODE_GLYPHS).encode(enc)
+    except (UnicodeEncodeError, LookupError):
+        return ASCII_GLYPHS
+    return UNICODE_GLYPHS
+
+
+def _write(text: str, stream: TextIO) -> None:
+    """Print ``text``, escaping whatever ``stream`` cannot encode.
+
+    Glyphs are chosen up front, but column names and values come from the file
+    and can be anything. Escaping keeps the character visible as ``\\uXXXX``
+    instead of ending the run.
+    """
+    enc = _stream_encoding(stream)
+    if enc is not None:
+        try:
+            text.encode(enc)
+        except UnicodeEncodeError:
+            text = text.encode(enc, "backslashreplace").decode(enc)
+        except LookupError:
+            pass
+    try:
+        print(text, file=stream)
+    except BrokenPipeError:
+        # `csvpeek --json | head -1` closes the pipe while there is still output
+        # to write. That is the reader's decision, not an error, and docs/cli.md
+        # recommends exactly this shape of pipeline. Exiting quietly beats a
+        # traceback about a pipe the user deliberately closed.
+        raise SystemExit(0) from None
 
 
 def _paint(enabled: bool):
@@ -30,13 +103,20 @@ def _fmt_num(n) -> str:
     return str(n)
 
 
-def _column_summary(col: ColumnProfile) -> str:
+def _column_summary(col: ColumnProfile, glyphs: Glyphs = UNICODE_GLYPHS) -> str:
     """The one-line, color-free summary for a column (shared by all renderers)."""
     if col.dtype in ("int", "float"):
-        return (
-            f"min {_fmt_num(col.minimum)} · p25 {_fmt_num(col.p25)} · "
-            f"median {_fmt_num(col.median)} · p75 {_fmt_num(col.p75)} · "
-            f"max {_fmt_num(col.maximum)} · mean {_fmt_num(col.mean)} · sd {_fmt_num(col.stdev)}"
+        sep = f" {glyphs.dot} "
+        return sep.join(
+            (
+                f"min {_fmt_num(col.minimum)}",
+                f"p25 {_fmt_num(col.p25)}",
+                f"median {_fmt_num(col.median)}",
+                f"p75 {_fmt_num(col.p75)}",
+                f"max {_fmt_num(col.maximum)}",
+                f"mean {_fmt_num(col.mean)}",
+                f"sd {_fmt_num(col.stdev)}",
+            )
         )
     if col.top:
         return ", ".join(f"{v} ({n})" for v, n in col.top)
@@ -47,10 +127,10 @@ def _nulls_cell(col: ColumnProfile) -> str:
     return f"{col.nulls} ({col.null_pct}%)" if col.nulls else "0"
 
 
-def render(profile: Profile, use_color: bool) -> str:
+def render(profile: Profile, use_color: bool, glyphs: Glyphs = UNICODE_GLYPHS) -> str:
     c = _paint(use_color)
     out: list[str] = []
-    out.append(c(f"  {profile.rows} rows × {len(profile.columns)} columns", _BOLD))
+    out.append(c(f"  {profile.rows} rows {glyphs.times} {len(profile.columns)} columns", _BOLD))
     out.append("")
 
     name_w = max((len(col.name) for col in profile.columns), default=4)
@@ -58,10 +138,10 @@ def render(profile: Profile, use_color: bool) -> str:
 
     header = f"  {'column'.ljust(name_w)}  {'type':<7} {'nulls':>7} {'unique':>7}  summary"
     out.append(c(header, _DIM))
-    out.append(c("  " + "─" * (len(header) - 2), _DIM))
+    out.append(c("  " + glyphs.rule * (len(header) - 2), _DIM))
 
     for col in profile.columns:
-        summary = _column_summary(col)
+        summary = _column_summary(col, glyphs)
         if summary == "(empty)":
             summary = c(summary, _DIM)
         line = (
@@ -79,12 +159,12 @@ def _md_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("|", "\\|")
 
 
-def render_markdown(profile: Profile) -> str:
+def render_markdown(profile: Profile, glyphs: Glyphs = UNICODE_GLYPHS) -> str:
     """Render the profile as a Markdown document, a table you can paste into a PR."""
     out: list[str] = [
         "# CSV profile",
         "",
-        f"**{profile.rows} rows × {len(profile.columns)} columns**",
+        f"**{profile.rows} rows {glyphs.times} {len(profile.columns)} columns**",
         "",
         "| Column | Type | Nulls | Unique | Summary |",
         "| --- | --- | ---: | ---: | --- |",
@@ -92,7 +172,7 @@ def render_markdown(profile: Profile) -> str:
     for col in profile.columns:
         out.append(
             f"| `{_md_escape(col.name)}` | {col.dtype} | {_nulls_cell(col)} | "
-            f"{col.unique} | {_md_escape(_column_summary(col))} |"
+            f"{col.unique} | {_md_escape(_column_summary(col, glyphs))} |"
         )
     out.append("")
     return "\n".join(out)
@@ -118,25 +198,32 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _fail(message: str, code: int) -> int:
+    _write(f"csvpeek: {message}", sys.stderr)
+    return code
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         profile = profile_file(args.file, delimiter=args.delimiter, top_n=args.top, limit=args.limit)
     except FileNotFoundError:
-        print(f"csvpeek: file not found: {args.file}", file=sys.stderr)
-        return 2
+        return _fail(f"file not found: {args.file}", _EXIT_BAD_INPUT)
     except OSError as exc:
-        print(f"csvpeek: could not read {args.file}: {exc}", file=sys.stderr)
-        return 2
+        return _fail(f"could not read {args.file}: {exc}", _EXIT_BAD_INPUT)
+    except ProfileError as exc:
+        return _fail(str(exc), _EXIT_BAD_CONTENT)
 
+    glyphs = glyphs_for(sys.stdout)
     fmt = "json" if args.json else args.format
     if fmt == "json":
-        print(json.dumps(profile.to_dict(), indent=2))
+        # json.dumps escapes non-ASCII by default, so this needs no glyph care.
+        _write(json.dumps(profile.to_dict(), indent=2), sys.stdout)
     elif fmt == "md":
-        print(render_markdown(profile))
+        _write(render_markdown(profile, glyphs), sys.stdout)
     else:
         use_color = sys.stdout.isatty() and not args.no_color
-        print(render(profile, use_color))
+        _write(render(profile, use_color, glyphs), sys.stdout)
     return 0
 
 

@@ -1,6 +1,8 @@
 import csv
 
-from csvpeek.core import infer_type, is_null, profile_file, profile_rows
+import pytest
+
+from csvpeek.core import ProfileError, infer_type, is_null, profile_file, profile_rows
 
 
 def test_is_null():
@@ -119,3 +121,56 @@ def test_empty_file(tmp_path):
     p.write_text("", encoding="utf-8")
     prof = profile_file(str(p))
     assert prof.rows == 0 and prof.columns == []
+
+
+def test_non_utf8_file_raises_profile_error(tmp_path):
+    p = tmp_path / "latin1.csv"
+    p.write_bytes("name,city\nJosé,Málaga\n".encode("cp1252"))
+    with pytest.raises(ProfileError, match="not UTF-8 text"):
+        profile_file(str(p))
+
+
+def test_oversized_field_raises_profile_error(tmp_path):
+    p = tmp_path / "big.csv"
+    p.write_text("a,b\n" + "x" * (csv.field_size_limit() + 1) + ",1\n", encoding="utf-8")
+    with pytest.raises(ProfileError, match="field larger than field limit"):
+        profile_file(str(p))
+
+
+def test_infinity_raises_profile_error():
+    # inf parses as a float, then breaks statistics and has no JSON literal.
+    with pytest.raises(ProfileError, match="not a finite number"):
+        profile_rows(["v"], [["1"], ["inf"]])
+
+
+def test_single_infinity_raises_profile_error():
+    # One value skips stdev and quantiles, so the guard cannot live there.
+    with pytest.raises(ProfileError, match="not a finite number"):
+        profile_rows(["v"], [["inf"]])
+
+
+def test_huge_integer_that_overflows_to_inf_is_rejected():
+    with pytest.raises(ProfileError, match="not a finite number"):
+        profile_rows(["v"], [["1"], ["1" * 400]])
+
+
+def test_finite_values_that_overflow_when_summed_are_rejected():
+    # Every value is finite, so the input guard passes them. fsum raises rather
+    # than returning inf, which used to escape as a traceback and exit 1.
+    with pytest.raises(ProfileError, match="too large to summarise"):
+        profile_rows(["v"], [["1e308"], ["1e308"]])
+
+
+def test_finite_values_with_infinite_spread_are_rejected():
+    # quantiles turns a finite pair into +/-Infinity, which has no JSON literal,
+    # so --json used to emit output no strict parser accepts, at exit 0.
+    with pytest.raises(ProfileError, match="not a finite number"):
+        profile_rows(["v"], [["1e308"], ["-1e308"]])
+
+
+def test_multi_character_delimiter_is_a_user_error(tmp_path):
+    # csv raises TypeError here, not csv.Error, so the CSV handler missed it.
+    p = tmp_path / "d.csv"
+    p.write_text("a,b\n1,2\n", encoding="utf-8")
+    with pytest.raises(ProfileError, match="single character"):
+        profile_file(str(p), delimiter=";;")
