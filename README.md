@@ -1,6 +1,7 @@
 # csvpeek
 
 [![CI](https://github.com/martin-k-m/csvpeek/actions/workflows/ci.yml/badge.svg)](https://github.com/martin-k-m/csvpeek/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/martin-k-m/csvpeek?sort=semver&display_name=tag&label=release&color=7C6CFF)](https://github.com/martin-k-m/csvpeek/releases/latest)
 [![Python](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-7C6CFF)](LICENSE)
 [![Zero dependencies](https://img.shields.io/badge/dependencies-0-4F8CFF)](pyproject.toml)
