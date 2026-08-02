@@ -164,7 +164,13 @@ def test_finite_values_that_overflow_when_summed_are_rejected():
 def test_finite_values_with_infinite_spread_are_rejected():
     # quantiles turns a finite pair into +/-Infinity, which has no JSON literal,
     # so --json used to emit output no strict parser accepts, at exit 0.
-    with pytest.raises(ProfileError, match="not a finite number"):
+    #
+    # Which guard catches it depends on the Python version, so this asserts the
+    # outcome rather than the route. On 3.12 and later quantiles returns the
+    # infinity and the finiteness check rejects it; on 3.10 and earlier the same
+    # input raises OverflowError inside quantiles first. Both are ProfileError
+    # and both exit 3, which is the contract that matters.
+    with pytest.raises(ProfileError, match="not a finite number|too large to summarise"):
         profile_rows(["v"], [["1e308"], ["-1e308"]])
 
 
