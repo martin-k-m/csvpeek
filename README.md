@@ -17,12 +17,12 @@ $ csvpeek examples/people.csv
   6 rows × 5 columns
 
   column  type      nulls  unique  summary
-  ─────────────────────────────────────────────────────────────────────
+  ────────────────────────────────────────
   name    string        0       6  Ann (1), Bob (1), Cara (1), Dan (1), Eve (1)
-  age     int      1 (16.7%)     5  min 22 · p25 25.5 · median 29 · p75 37.5 · max 41 · mean 31 · sd 6.2929
+  age     int     1 (16.7%)       4  min 22 · p25 25.5 · median 29 · p75 37.5 · max 41 · mean 31 · sd 6.2929
   city    string        0       3  Santa Cruz (3), Brentwood (2), Oakland (1)
   active  bool          0       2  true (4), false (2)
-  score   float    1 (16.7%)     5  min 6.5 · p25 6.8 · median 8.8 · p75 9.2 · max 9.4 · mean 8.16 · sd 1.143
+  score   float   1 (16.7%)       5  min 6.5 · p25 6.8 · median 8.8 · p75 9.2 · max 9.4 · mean 8.16 · sd 1.143
 ```
 
 ## Install
@@ -88,6 +88,14 @@ for col in profile.columns:
 
 profile.to_dict()   # JSON-ready
 ```
+
+## Documentation
+
+| Document | What it covers |
+| :-- | :-- |
+| [docs/cli.md](docs/cli.md) | Every flag, output format, and exit code |
+| [docs/profiling.md](docs/profiling.md) | The exact rules behind every number csvpeek prints |
+| [docs/api.md](docs/api.md) | Using csvpeek as a library |
 
 ## Development
 
