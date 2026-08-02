@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "csvpeek"
-version = "0.1.0"
-description = "A fast, zero-dependency CSV profiler for the terminal — types, nulls, and stats."
+version = "0.2.0"
+description = "A fast, zero-dependency CSV profiler for the terminal: types, nulls, and stats."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

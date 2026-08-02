@@ -17,26 +17,26 @@ installation.
 | `-t`, `--top N` | `5` | How many of the most common values to show for text and bool columns |
 | `-n`, `--limit ROWS` | all | Read only the first `ROWS` data rows. The header is always read |
 | `--format {table,md,json}` | `table` | Output format |
-| `--json` | — | Shortcut for `--format json` |
-| `--no-color` | — | Disable ANSI colour |
-| `-V`, `--version` | — | Print the version and exit |
-| `-h`, `--help` | — | Print usage and exit |
+| `--json` | off | Shortcut for `--format json` |
+| `--no-color` | off | Disable ANSI colour |
+| `-V`, `--version` | | Print the version and exit |
+| `-h`, `--help` | | Print usage and exit |
 
 `--json` wins over `--format` if both are given.
 
 ## Output formats
 
-**`table`** (default) — an aligned terminal table. Colour is applied only when
-stdout is a TTY *and* `--no-color` was not passed, so a redirect or a pipe gets
-plain text automatically. You rarely need `--no-color` explicitly.
+**`table`** is the default: an aligned terminal table. Colour is applied only
+when stdout is a TTY *and* `--no-color` was not passed, so a redirect or a pipe
+gets plain text automatically. You rarely need `--no-color` explicitly.
 
-**`md`** — a Markdown document with a table, intended for pasting into a pull
+**`md`** is a Markdown document with a table, intended for pasting into a pull
 request or an issue. Column names are backticked, and `|` and `\` in names or
 values are escaped so a stray character cannot break the table.
 
-**`json`** — the full profile, indented two spaces. This is the format to parse;
-the table layout is for humans and may change. See [api.md](api.md#json-shape)
-for the schema.
+**`json`** is the full profile, indented two spaces. This is the format to parse.
+The table layout is for humans and may change. See
+[api.md](api.md#json-shape) for the schema.
 
 ## Examples
 
@@ -50,7 +50,7 @@ csvpeek data.csv --format md      # Markdown table for a PR
 csvpeek data.csv --json | jq '.columns[] | select(.nulls > 0) | .name'
 ```
 
-That last one is the pattern worth remembering: `--json` plus `jq` turns csvpeek
+That last one is the pattern worth remembering. `--json` plus `jq` turns csvpeek
 into a check you can run in CI, for example failing a build when a column that
 should be complete has gone sparse.
 
@@ -64,16 +64,16 @@ should be complete has gone sparse.
 
 A malformed CSV is not an error. csvpeek reads what is there: rows shorter than
 the header are padded with empty values, which then count as nulls. A file whose
-header row is missing entirely — a completely empty file — profiles as zero rows
-and zero columns rather than failing.
+header row is missing entirely, meaning a completely empty file, profiles as zero
+rows and zero columns rather than failing.
 
 ## Sampling large files
 
 `-n/--limit` stops reading after N data rows. It is a genuine early exit, not a
 filter applied after loading, so it is the right tool for a multi-gigabyte file.
 
-Be aware of what it changes: every statistic is then computed over the sample,
-not the file. Type inference in particular can differ — if the one non-numeric
+Be aware of what it changes. Every statistic is then computed over the sample,
+not the file. Type inference in particular can differ: if the one non-numeric
 value in a column sits at row 50,000, then `-n 10000` reports that column as
-`int` where a full read reports `string`. Sample to explore; read fully before
-you conclude anything.
+`int` where a full read reports `string`. Sample to explore, then read fully
+before you conclude anything.

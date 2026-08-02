@@ -1,4 +1,4 @@
-"""Core profiling logic — pure standard library, deterministic, no side effects.
+"""Core profiling logic: pure standard library, deterministic, no side effects.
 
 The type inference and statistics here are intentionally simple and explainable:
 the same input always produces the same profile, and every number is something you
@@ -183,7 +183,7 @@ def profile_rows(
 ) -> Profile:
     """Profile already-parsed rows against a header.
 
-    ``limit`` caps how many data rows are read — useful for sampling a large
+    ``limit`` caps how many data rows are read, useful for sampling a large
     file. ``None`` reads everything.
     """
     columns: list[list[str]] = [[] for _ in header]

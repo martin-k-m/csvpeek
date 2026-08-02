@@ -80,7 +80,7 @@ def _md_escape(text: str) -> str:
 
 
 def render_markdown(profile: Profile) -> str:
-    """Render the profile as a Markdown document — a table you can paste into a PR."""
+    """Render the profile as a Markdown document, a table you can paste into a PR."""
     out: list[str] = [
         "# CSV profile",
         "",
@@ -101,7 +101,7 @@ def render_markdown(profile: Profile) -> str:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="csvpeek",
-        description="Profile a CSV file from the terminal — types, nulls, and stats. Zero dependencies.",
+        description="Profile a CSV file from the terminal: types, nulls, and stats. Zero dependencies.",
     )
     p.add_argument("file", help="path to a CSV file")
     p.add_argument("-d", "--delimiter", default=None,

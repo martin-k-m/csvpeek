@@ -5,8 +5,10 @@ All notable changes to csvpeek are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-02
+
 ### Added
-- **Markdown output** (`--format md`) — render the profile as a Markdown table you
+- **Markdown output** (`--format md`) renders the profile as a Markdown table you
   can paste straight into a pull request or doc. `--format` also accepts `table`
   (default) and `json`; `--json` is now a shortcut for `--format json`.
 - Date-type detection (`date` dtype), separator-guarded so bare years/ids stay numeric.

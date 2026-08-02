@@ -6,7 +6,7 @@
 [![Zero dependencies](https://img.shields.io/badge/dependencies-0-4F8CFF)](pyproject.toml)
 
 A fast, **zero-dependency** CSV profiler for the terminal. Point it at a file and get
-column types, null counts, numeric statistics, and top values — in one glance.
+column types, null counts, numeric statistics, and top values, in one glance.
 
 Pure Python standard library. Deterministic: the same file always produces the same
 profile. No pandas, no install-time downloads, nothing leaves your machine.
@@ -63,15 +63,15 @@ csvpeek data.csv --no-color      # plain text
 
 ## What it computes
 
-- **Type inference** per column — `int`, `float`, `bool`, `date`, `string`, or `empty`. A
+- **Type inference** per column: `int`, `float`, `bool`, `date`, `string`, or `empty`. A
   column takes a type only if *every* non-null value fits; one stray label keeps it a
   string (no silent coercion). Dates require a separator (`2024-01-01`, `01/02/2024`), so
   bare years and ids stay numeric.
-- **Nulls** — empty, `NA`, `N/A`, `null`, `none`, `nan`, `nil` (case-insensitive), with a
+- **Nulls**: empty, `NA`, `N/A`, `null`, `none`, `nan`, `nil` (case-insensitive), with a
   percentage.
-- **Numeric columns** — min, 25th/50th/75th percentiles, max, mean, and population
+- **Numeric columns**: min, 25th/50th/75th percentiles, max, mean, and population
   standard deviation.
-- **Text/bool columns** — unique count and the most common values (ties broken
+- **Text/bool columns**: unique count and the most common values (ties broken
   alphabetically, so runs are reproducible).
 
 ## Library

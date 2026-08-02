@@ -19,6 +19,6 @@ progresses.
 
 csvpeek reads a CSV file you point it at and writes a profile to stdout. It has
 **no runtime dependencies**, makes **no network calls**, and never executes file
-contents — so the realistic risk surface is parsing untrusted input (for example
+contents, so the realistic risk surface is parsing untrusted input (for example
 a malformed or adversarially large file causing excessive memory use or a crash).
 Reports in that area are in scope and welcome.

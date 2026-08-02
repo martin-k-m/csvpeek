@@ -1,7 +1,7 @@
 # Library API
 
 Everything the CLI does is available as a small, dependency-free API. The
-functions are pure: they read a file (or accept rows you already have) and return
+functions are pure: they read a file, or accept rows you already have, and return
 dataclasses. Nothing is cached or mutated globally.
 
 ```python
@@ -23,18 +23,18 @@ Read and profile a CSV file.
 | Argument | Meaning |
 | :-- | :-- |
 | `path` | Path to the file. Opened as `utf-8-sig` |
-| `delimiter` | Field delimiter; `None` auto-detects (see [profiling.md](profiling.md#reading-the-file)) |
+| `delimiter` | Field delimiter. `None` auto-detects, see [profiling.md](profiling.md#reading-the-file) |
 | `top_n` | How many most-common values to keep per non-numeric column |
-| `limit` | Read only the first N data rows; `None` reads everything |
+| `limit` | Read only the first N data rows. `None` reads everything |
 
 Raises `FileNotFoundError` if the path does not exist, and `OSError` for other
 read failures. A file with no header row returns `Profile(rows=0, columns=[])`.
 
 ### `profile_rows(header, rows, top_n=5, limit=None) -> Profile`
 
-Profile rows you have already parsed. `header` is a sequence of column names;
-`rows` is any iterable of sequences — a `csv.reader`, a list of lists, or a
-generator. This is the entry point to use when the data is not a file on disk.
+Profile rows you have already parsed. `header` is a sequence of column names and
+`rows` is any iterable of sequences: a `csv.reader`, a list of lists, or a
+generator. Use this when the data is not a file on disk.
 
 ### `infer_type(values) -> str`
 
@@ -63,9 +63,9 @@ csvpeek considers null rather than reimplementing the list.
 
 | Attribute | Type | Meaning |
 | :-- | :-- | :-- |
-| `rows` | `int` | Number of data rows read (excludes the header, respects `limit`) |
+| `rows` | `int` | Number of data rows read, excluding the header, respecting `limit` |
 | `columns` | `list[ColumnProfile]` | One per header field, in file order |
-| `to_dict()` | `dict` | JSON-ready form — see below |
+| `to_dict()` | `dict` | JSON-ready form, see below |
 
 ### `ColumnProfile`
 
@@ -73,18 +73,18 @@ csvpeek considers null rather than reimplementing the list.
 | :-- | :-- | :-- |
 | `name` | `str` | all |
 | `dtype` | `str` | all |
-| `count` | `int` | all — non-null values |
+| `count` | `int` | all, non-null values |
 | `nulls` | `int` | all |
-| `unique` | `int` | all — distinct non-null values |
-| `null_pct` | `float` (property) | all — percentage, one decimal |
+| `unique` | `int` | all, distinct non-null values |
+| `null_pct` | `float` (property) | all, percentage to one decimal |
 | `minimum`, `maximum` | `float \| None` | numeric only |
 | `mean`, `median`, `stdev` | `float \| None` | numeric only |
 | `p25`, `p75` | `float \| None` | numeric with ≥2 values |
-| `top` | `list[tuple[str, int]]` | non-numeric — `(value, count)` |
+| `top` | `list[tuple[str, int]]` | non-numeric, `(value, count)` |
 
-Fields that do not apply to a column are `None` (or `[]` for `top`), never zero.
-`None` means *not applicable*, so treating it as `0` will silently invent data —
-check `dtype` first.
+Fields that do not apply to a column are `None`, or `[]` for `top`, never zero.
+`None` means *not applicable*, so treating it as `0` will silently invent data.
+Check `dtype` first.
 
 ## JSON shape
 
@@ -115,8 +115,8 @@ check `dtype` first.
 }
 ```
 
-Note the renames: `minimum` and `maximum` on the dataclass become **`min`** and
-**`max`** in JSON. `top` entries are `{"value": ..., "count": ...}` objects
+Note the renames. `minimum` and `maximum` on the dataclass become **`min`** and
+**`max`** in JSON, and `top` entries are `{"value": ..., "count": ...}` objects
 rather than pairs. Non-applicable numeric fields serialise as `null`.
 
-This shape is the stable contract — parse it rather than the table output.
+This shape is the stable contract, so parse it rather than the table output.

@@ -2,7 +2,7 @@
 
 csvpeek profiles a CSV from the terminal: column types, null counts, numeric
 statistics, and top values. Pure Python standard library, zero dependencies, and
-deterministic — the same file always produces the same profile.
+deterministic, so the same file always produces the same profile.
 
 | Document | What it covers |
 | :-- | :-- |
@@ -10,7 +10,7 @@ deterministic — the same file always produces the same profile.
 | [profiling.md](profiling.md) | The exact rules behind every number csvpeek prints |
 | [api.md](api.md) | Using csvpeek as a library |
 
-The [README](../README.md) is the fastest way in; these pages are the reference.
+The [README](../README.md) is the fastest way in. These pages are the reference.
 
 ## Design commitments
 
