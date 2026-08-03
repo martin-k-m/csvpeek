@@ -3,7 +3,9 @@
 All notable changes to csvpeek are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.0] - 2026-08-03
+
+The JSON output is versioned and self-consistent, and every input csvpeek cannot summarise now fails with a reason instead of a traceback.
 
 ### Changed
 - **Breaking (JSON).** `--json` and `Profile.to_dict()` emit `minimum` and
