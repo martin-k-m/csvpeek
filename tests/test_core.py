@@ -2,7 +2,14 @@ import csv
 
 import pytest
 
-from csvpeek.core import ProfileError, infer_type, is_null, profile_file, profile_rows
+from csvpeek.core import (
+    SCHEMA_VERSION,
+    ProfileError,
+    infer_type,
+    is_null,
+    profile_file,
+    profile_rows,
+)
 
 
 def test_is_null():
@@ -38,6 +45,52 @@ def test_profile_rows_numeric_stats():
 def test_quartiles_need_two_values():
     col = profile_rows(["x"], [["5"]]).columns[0]
     assert col.p25 is None and col.p75 is None
+
+
+def test_int_column_keeps_integer_statistics():
+    col = profile_rows(["v"], [["2"], ["4"], ["9"]]).columns[0]
+    assert col.dtype == "int"
+    # the exact answers stay ints, so the file saying 2 is not reported as 2.0
+    assert isinstance(col.minimum, int) and col.minimum == 2
+    assert isinstance(col.maximum, int) and col.maximum == 9
+    assert isinstance(col.median, int) and col.median == 4
+    # these divide, so they are floats whatever the column holds
+    assert isinstance(col.mean, float)
+    assert isinstance(col.stdev, float)
+    assert isinstance(col.p25, float) and isinstance(col.p75, float)
+
+
+def test_int_column_median_of_an_even_count_is_a_float():
+    # the middle pair is averaged, which can land on a half
+    col = profile_rows(["x"], [["1"], ["2"]]).columns[0]
+    assert col.median == 1.5
+
+
+def test_float_column_statistics_stay_floats():
+    col = profile_rows(["x"], [["1"], ["2.5"]]).columns[0]
+    assert col.dtype == "float"
+    assert isinstance(col.minimum, float) and col.minimum == 1.0
+    assert isinstance(col.maximum, float) and col.maximum == 2.5
+
+
+def test_to_dict_shape():
+    payload = profile_rows(["v"], [["2"], ["4"], ["9"]]).to_dict()
+    assert payload["schema"] == SCHEMA_VERSION == 1
+    assert list(payload) == ["schema", "rows", "columns"]
+    # keys match the ColumnProfile attributes one for one
+    assert list(payload["columns"][0]) == [
+        "name", "dtype", "count", "nulls", "null_pct", "unique",
+        "minimum", "maximum", "mean", "median", "stdev", "p25", "p75", "top",
+    ]
+    assert payload["columns"][0]["minimum"] == 2
+
+
+def test_to_dict_expands_top_into_objects():
+    payload = profile_rows(["c"], [["red"], ["red"], ["blue"]]).to_dict()
+    assert payload["columns"][0]["top"] == [
+        {"value": "red", "count": 2},
+        {"value": "blue", "count": 1},
+    ]
 
 
 def test_sniff_delimiter():

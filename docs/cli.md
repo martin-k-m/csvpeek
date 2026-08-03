@@ -35,8 +35,10 @@ request or an issue. Column names are backticked, and `|` and `\` in names or
 values are escaped so a stray character cannot break the table.
 
 **`json`** is the full profile, indented two spaces. This is the format to parse.
-The table layout is for humans and may change. See
-[api.md](api.md#json-shape) for the schema.
+The table layout is for humans and may change. The payload opens with a
+`"schema"` number, currently `1`, which goes up if a key is ever renamed or
+changes meaning, so check it before trusting the rest. See
+[api.md](api.md#json-shape) for the full schema.
 
 ### Characters and encoding
 

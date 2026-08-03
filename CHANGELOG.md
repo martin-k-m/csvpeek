@@ -5,6 +5,18 @@ All notable changes to csvpeek are documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+- **Breaking (JSON).** `--json` and `Profile.to_dict()` emit `minimum` and
+  `maximum` where they used to emit `min` and `max`. Those were the only two keys
+  that did not match the attribute behind them, and the docs described the rename
+  instead of removing it. Readers of `.min`/`.max` need `.minimum`/`.maximum`.
+  The dataclass attributes and the table output are unchanged.
+- **Breaking (JSON).** An `int` column reports `minimum`, `maximum`, and `median`
+  for an odd count, as integers. Every numeric value was cast through `float`, so
+  a file saying `2` came back as `"min": 2.0` beside `"dtype": "int"` in the same
+  payload. `mean`, `stdev`, `p25` and `p75` divide, so they stay floats for every
+  column, as does an even count's `median`.
+
 ### Fixed
 - Statistics computed from finite values are now checked for finiteness too. A
   column of values near the float maximum overflowed inside `fsum` and escaped as
@@ -24,6 +36,10 @@ All notable changes to csvpeek are documented here. This project follows
   `\uXXXX` instead of aborting the run.
 
 ### Added
+- A top-level `"schema"` number in the JSON payload, `1` for the shape described
+  in `docs/api.md`, also exported as `csvpeek.SCHEMA_VERSION`. It goes up when a
+  key is renamed, removed, or changes meaning, so a consumer can detect a format
+  change up front rather than one missing field at a time.
 - Exit code `3` for a file that reads but cannot be profiled: not UTF-8, refused
   by the CSV reader (a field past the 131072-byte limit), or a numeric column
   holding a non-finite value such as `inf`. Each prints a readable reason on

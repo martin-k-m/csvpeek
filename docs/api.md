@@ -63,6 +63,12 @@ back to `,` when detection fails.
 The frozen set of strings treated as missing. Exported so you can check what
 csvpeek considers null rather than reimplementing the list.
 
+### `SCHEMA_VERSION`
+
+The `int` that `to_dict()` writes as `"schema"`. Importable from `csvpeek`, so
+code that writes a profile to disk can record the version it produced without
+hard-coding a number.
+
 ## Types
 
 ### `ProfileError`
@@ -99,8 +105,9 @@ except ProfileError as exc:
 | `nulls` | `int` | all |
 | `unique` | `int` | all, distinct non-null values |
 | `null_pct` | `float` (property) | all, percentage to one decimal |
-| `minimum`, `maximum` | `float \| None` | numeric only |
-| `mean`, `median`, `stdev` | `float \| None` | numeric only |
+| `minimum`, `maximum` | `int \| float \| None` | numeric only |
+| `median` | `int \| float \| None` | numeric only |
+| `mean`, `stdev` | `float \| None` | numeric only |
 | `p25`, `p75` | `float \| None` | numeric with ≥2 values |
 | `top` | `list[tuple[str, int]]` | non-numeric, `(value, count)` |
 
@@ -108,13 +115,18 @@ Fields that do not apply to a column are `None`, or `[]` for `top`, never zero.
 `None` means *not applicable*, so treating it as `0` will silently invent data.
 Check `dtype` first.
 
+An `int` column answers with `int`s wherever it can do so exactly, so `minimum`
+and `maximum` are `int`s there, and so is `median` when the count is odd. See
+[profiling.md](profiling.md#statistics) for the rule and its one edge case.
+
 ## JSON shape
 
-`Profile.to_dict()` is what `--json` prints. It renames two fields and expands
-`top` into objects:
+`Profile.to_dict()` is what `--json` prints: a schema version, then the profile.
+Every column key is named exactly as the attribute it comes from.
 
 ```json
 {
+  "schema": 1,
   "rows": 6,
   "columns": [
     {
@@ -124,10 +136,10 @@ Check `dtype` first.
       "nulls": 1,
       "null_pct": 16.7,
       "unique": 4,
-      "min": 22.0,
-      "max": 41.0,
+      "minimum": 22,
+      "maximum": 41,
       "mean": 31.0,
-      "median": 29.0,
+      "median": 29,
       "stdev": 6.2929,
       "p25": 25.5,
       "p75": 37.5,
@@ -137,8 +149,32 @@ Check `dtype` first.
 }
 ```
 
-Note the renames. `minimum` and `maximum` on the dataclass become **`min`** and
-**`max`** in JSON, and `top` entries are `{"value": ..., "count": ...}` objects
-rather than pairs. Non-applicable numeric fields serialise as `null`.
+`top` is the one field that changes shape, from `(value, count)` pairs to
+`{"value": ..., "count": ...}` objects, because JSON has no tuple.
+Non-applicable numeric fields serialise as `null`. This shape is the stable
+contract, so parse it rather than the table output.
 
-This shape is the stable contract, so parse it rather than the table output.
+### `schema`
+
+The top-level `schema` is an integer, currently `1`, and it is the first thing to
+read. It goes up whenever a key is renamed, removed, or changes meaning, so a
+consumer can reject a payload it does not understand instead of finding out one
+missing field at a time. Adding an optional key does not bump it, so parse
+leniently: check `schema`, then ignore any key you do not recognise.
+
+```python
+import json
+
+from csvpeek import SCHEMA_VERSION
+
+with open("profile.json") as fh:
+    payload = json.load(fh)
+
+if payload["schema"] != SCHEMA_VERSION:
+    raise SystemExit(f"profile.json is schema {payload['schema']}, not {SCHEMA_VERSION}")
+```
+
+> **Changed before 1.0.** `minimum` and `maximum` used to be emitted as `min` and
+> `max`, and every numeric statistic was a float, so an `int` column reported
+> `"min": 22.0` alongside `"dtype": "int"`. Both are fixed above, and `schema`
+> exists so the next such change is detectable rather than silent.

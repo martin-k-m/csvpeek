@@ -82,18 +82,36 @@ or re-emits the value, so the ambiguity does not propagate.
 **Every column** gets `count` (non-null values), `nulls`, `null_pct`, and
 `unique`, the number of distinct non-null values after stripping.
 
-**`int` and `float` columns** additionally get the following, with all non-null
-values read as floats:
+**`int` and `float` columns** additionally get the following:
 
 | Field | Definition |
 | :-- | :-- |
-| `min` / `max` | Smallest and largest value, unrounded |
+| `minimum` / `maximum` | Smallest and largest value, unrounded |
 | `mean` | `statistics.fmean`, rounded to 4 decimals |
 | `median` | `statistics.median`, unrounded |
 | `stdev` | **Population** standard deviation (`pstdev`), rounded to 4 decimals |
 | `p25` / `p75` | `statistics.quantiles(n=4)`, exclusive method, rounded to 4 decimals |
 
-Two details matter if you compare csvpeek against another tool.
+The table and Markdown output abbreviate the first two to `min` and `max` to keep
+the line short. `--json` and the dataclass both use the full names.
+
+**An `int` column reports integers.** `minimum` and `maximum` are values taken
+straight from the column, so a file that says `2` is not reported as `2.0` in a
+payload whose own `dtype` says `int`. `median` is one of the values too when the
+count is odd, so it is an `int` there.
+
+**An even count's median is a float**, even for an `int` column, because the two
+middle values are averaged: `1` and `2` give `1.5`, and `2` and `4` give `3.0`.
+Read `median` as a number rather than as an `int`.
+
+**`mean`, `stdev`, `p25` and `p75` are always floats**, whatever the column
+holds, because each of them divides. `float` columns are unaffected throughout.
+
+One consequence is worth knowing. `minimum` and `maximum` are exact even past
+`2**53`, where a float silently rounds, while `mean` and `stdev` are computed
+over floats and carry that rounding.
+
+Two more details matter if you compare csvpeek against another tool.
 
 `stdev` is the **population** deviation, not the sample one. It divides by *n*,
 not *n − 1*. A column with exactly one value reports `0.0` rather than being
@@ -103,8 +121,11 @@ A numeric column containing a value that is not finite, `inf`, `-Infinity`,
 `1e999`, or an integer too large to hold as a float, is **rejected** rather than
 profiled: csvpeek reports the column and exits `3`. The standard deviation of an
 infinite value is undefined, and JSON has no literal for it, so any answer here
-would be either wrong or unparseable. Note that `nan` is a null token, so it is
-counted as missing and never reaches this check.
+would be either wrong or unparseable. The oversized integer is rejected too, even
+though Python itself could hold it, because the mean and the deviation are
+computed over floats and would overflow whatever `minimum` and `maximum` could
+say. Note that `nan` is a null token, so it is counted as missing and never
+reaches this check.
 
 `p25` and `p75` use Python's default **exclusive** quantile method, which
 interpolates and can therefore fall outside the range spanned by a small sample's

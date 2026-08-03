@@ -71,6 +71,22 @@ def test_main_json_shortcut_matches_format_json(capsys, tmp_path):
     assert json.loads(shortcut)["rows"] == 1
 
 
+def test_json_output_carries_schema_and_integer_statistics(capsys, tmp_path):
+    path = tmp_path / "d.csv"
+    path.write_text("v\n2\n4\n9\n", encoding="utf-8")
+
+    assert main([str(path), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == 1
+    col = payload["columns"][0]
+    assert col["dtype"] == "int"
+    assert isinstance(col["minimum"], int) and col["minimum"] == 2
+    assert isinstance(col["maximum"], int) and col["maximum"] == 9
+    assert "min" not in col and "max" not in col  # the pre-1.0 spelling is gone
+    assert isinstance(col["mean"], float)
+
+
 def test_main_missing_file_returns_2(capsys):
     assert main(["does-not-exist.csv"]) == 2
     err = capsys.readouterr().err

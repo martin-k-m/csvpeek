@@ -12,7 +12,16 @@ import math
 import statistics
 from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Iterable, Optional, Sequence
+from typing import Iterable, Optional, Sequence, Union
+
+# Version of the JSON payload produced by ``Profile.to_dict``. Bumped whenever a
+# key is renamed, removed, or changes meaning, so a consumer can detect the
+# change up front instead of discovering it one missing field at a time.
+SCHEMA_VERSION = 1
+
+# A statistic is an int only where an int column can produce one exactly; see
+# ``_profile_column``.
+Number = Union[int, float]
 
 # Values treated as "missing" regardless of column type (case-insensitive).
 NULL_TOKENS = frozenset({"", "na", "n/a", "null", "none", "nan", "nil"})
@@ -101,11 +110,13 @@ class ColumnProfile:
     count: int          # non-null values
     nulls: int
     unique: int
-    # numeric-only (None for non-numeric columns)
-    minimum: float | None = None
-    maximum: float | None = None
+    # numeric-only (None for non-numeric columns). An int column reports the
+    # statistics it can answer exactly as ints, so minimum, maximum and median
+    # are ints there; mean, stdev and the quartiles divide and stay floats.
+    minimum: Number | None = None
+    maximum: Number | None = None
     mean: float | None = None
-    median: float | None = None
+    median: Number | None = None
     stdev: float | None = None
     p25: float | None = None
     p75: float | None = None
@@ -124,7 +135,14 @@ class Profile:
     columns: list[ColumnProfile]
 
     def to_dict(self) -> dict:
+        """The JSON-ready form: a schema version, then the profile itself.
+
+        Every column key is named after the attribute it comes from. ``top`` is
+        the one field that changes shape, from pairs to objects, because JSON
+        has no tuple.
+        """
         return {
+            "schema": SCHEMA_VERSION,
             "rows": self.rows,
             "columns": [
                 {
@@ -134,8 +152,8 @@ class Profile:
                     "nulls": c.nulls,
                     "null_pct": c.null_pct,
                     "unique": c.unique,
-                    "min": c.minimum,
-                    "max": c.maximum,
+                    "minimum": c.minimum,
+                    "maximum": c.maximum,
                     "mean": c.mean,
                     "median": c.median,
                     "stdev": c.stdev,
@@ -165,7 +183,7 @@ def _reject_non_finite(name: str, present: Sequence[str], nums: Sequence[float])
             )
 
 
-def _finite(name: str, stat: str, value: float) -> float:
+def _finite(name: str, stat: str, value: Number) -> Number:
     """Refuse a computed statistic that is not finite.
 
     ``_reject_non_finite`` checks what was parsed out of the file. This checks
@@ -198,13 +216,24 @@ def _profile_column(name: str, values: Sequence[str], top_n: int) -> ColumnProfi
     )
 
     if dtype in ("int", "float") and present:
+        # Two readings of the same values. The float one is what the guards and
+        # the dividing statistics need; the exact one keeps an int column's
+        # min/max/median as ints, so a file saying 2 is not reported as 2.0 in a
+        # payload whose own dtype says int. Parsing the strings as floats first
+        # also keeps the non-finite guard intact: float("1" * 400) is inf and is
+        # rejected below, where int() would happily build the number and only
+        # blow up later inside fmean.
         nums = [float(v) for v in present]
         _reject_non_finite(name, present, nums)
+        exact: Sequence[Number] = [int(v) for v in present] if dtype == "int" else nums
         try:
-            col.minimum = min(nums)
-            col.maximum = max(nums)
+            col.minimum = min(exact)
+            col.maximum = max(exact)
             col.mean = _finite(name, "mean", statistics.fmean(nums))
-            col.median = _finite(name, "median", statistics.median(nums))
+            # Odd counts return a value straight from the column, so an int
+            # column keeps its int. Even counts average the middle pair, which
+            # divides, so those come back as floats.
+            col.median = _finite(name, "median", statistics.median(exact))
             col.stdev = (
                 _finite(name, "stdev", statistics.pstdev(nums)) if len(nums) > 1 else 0.0
             )
