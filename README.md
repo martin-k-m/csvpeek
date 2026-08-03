@@ -31,8 +31,12 @@ $ csvpeek examples/people.csv
 Requires Python 3.9+.
 
 ```sh
-pip install git+https://github.com/martin-k-m/csvpeek
+pip install csvpeek-cli
 ```
+
+The distribution is `csvpeek-cli` because `csvpeek` on PyPI belongs to an
+unrelated project. The command, the import and this repository are all still
+`csvpeek`; only the string after `pip install` differs.
 
 Or run it straight from a clone, no install needed:
 

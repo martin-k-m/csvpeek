@@ -3,7 +3,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "csvpeek"
+# The distribution name is csvpeek-cli because `csvpeek` on PyPI belongs to an
+# unrelated project. Nothing else changes: the command is still `csvpeek`, the
+# import is still `csvpeek`, and the repository keeps its name. Only the string
+# after `pip install` differs.
+name = "csvpeek-cli"
 version = "1.0.0"
 description = "A fast, zero-dependency CSV profiler for the terminal: types, nulls, and stats."
 readme = "README.md"
