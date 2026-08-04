@@ -32,10 +32,11 @@ class Glyphs(NamedTuple):
     rule: str
     times: str
     dot: str
+    ellipsis: str
 
 
-UNICODE_GLYPHS = Glyphs(rule="─", times="×", dot="·")
-ASCII_GLYPHS = Glyphs(rule="-", times="x", dot="|")
+UNICODE_GLYPHS = Glyphs(rule="─", times="×", dot="·", ellipsis="…")
+ASCII_GLYPHS = Glyphs(rule="-", times="x", dot="|", ellipsis="...")
 
 
 def _stream_encoding(stream: TextIO) -> Optional[str]:
@@ -119,8 +120,32 @@ def _column_summary(col: ColumnProfile, glyphs: Glyphs = UNICODE_GLYPHS) -> str:
             )
         )
     if col.top:
-        return ", ".join(f"{v} ({n})" for v, n in col.top)
+        summary = ", ".join(f"{v} ({n})" for v, n in col.top)
+        note = _near_miss_note(col, glyphs)
+        return summary + note if note else summary
     return "(empty)"
+
+
+def _near_miss_note(col: ColumnProfile, glyphs: Glyphs) -> str:
+    """The `mostly int, 2 not: ...` tail on a column that nearly has a type.
+
+    Appended to the top values rather than replacing them, because both answer
+    real questions and neither is a substitute for the other.
+
+    Offending values are quoted because they are arbitrary text landing in a
+    comma-separated list: a value containing a comma or a space is unreadable
+    unquoted, and the whole point of this line is to be readable at a glance.
+    """
+    if not col.mostly:
+        return ""
+    missed = col.count - col.mostly_count
+    shown = ", ".join(f'"{v}"' for v, _ in col.outliers)
+    tail = f" {glyphs.dot} mostly {col.mostly}, {missed} not: {shown}"
+    # The list is capped, so say when it is: a truncated list that looks
+    # complete is worse than no list.
+    if missed > sum(n for _, n in col.outliers):
+        tail += f", {glyphs.ellipsis}"
+    return tail
 
 
 def _nulls_cell(col: ColumnProfile) -> str:

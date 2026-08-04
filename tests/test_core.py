@@ -81,6 +81,7 @@ def test_to_dict_shape():
     assert list(payload["columns"][0]) == [
         "name", "dtype", "count", "nulls", "null_pct", "unique",
         "minimum", "maximum", "mean", "median", "stdev", "p25", "p75", "top",
+        "mostly", "mostly_count", "outliers",
     ]
     assert payload["columns"][0]["minimum"] == 2
 
@@ -233,3 +234,80 @@ def test_multi_character_delimiter_is_a_user_error(tmp_path):
     p.write_text("a,b\n1,2\n", encoding="utf-8")
     with pytest.raises(ProfileError, match="single character"):
         profile_file(str(p), delimiter=";;")
+
+
+# --- the type a column almost has -------------------------------------------
+
+
+def test_near_miss_names_the_type_and_the_values_blocking_it():
+    from csvpeek.core import near_miss
+
+    assert near_miss(["1", "2", "3", "twelve"]) == ("int", 3, [("twelve", 1)])
+
+
+def test_a_clean_column_has_no_near_miss():
+    from csvpeek.core import near_miss
+
+    # infer_type already gives this column its type; there is nothing to explain.
+    assert near_miss(["1", "2", "3"]) == (None, 0, [])
+
+
+def test_a_text_column_has_no_near_miss():
+    from csvpeek.core import near_miss
+
+    assert near_miss(["a", "b", "c"]) == (None, 0, [])
+
+
+def test_a_minority_of_numbers_is_not_a_near_miss():
+    from csvpeek.core import near_miss
+
+    # One number among four values makes this a text column, not a numeric one
+    # with dirt in it, and reporting the three words as outliers would be
+    # backwards.
+    assert near_miss(["1", "a", "b", "c"]) == (None, 0, [])
+
+
+def test_int_beats_float_on_a_tie():
+    from csvpeek.core import near_miss
+
+    # Every int also parses as a float, so both candidates fit the same three
+    # values; the more specific one has to win or every int column would be
+    # described as a float.
+    kind, fit, _ = near_miss(["1", "2", "3", "x"])
+    assert (kind, fit) == ("int", 3)
+
+
+def test_outliers_are_ordered_by_count_then_value():
+    from csvpeek.core import near_miss
+
+    _, _, outliers = near_miss(["1", "2", "3", "4", "b", "a", "a"])
+    assert outliers == [("a", 2), ("b", 1)]
+
+
+def test_outliers_are_capped():
+    from csvpeek.core import near_miss
+
+    _, _, outliers = near_miss(["1", "2", "3", "4", "5", "6", "a", "b", "c", "d"])
+    assert len(outliers) == 3
+
+
+def test_near_miss_lands_on_the_profile():
+    col = profile_rows(["v"], [["1"], ["2"], ["3"], ["oops"]]).columns[0]
+    assert col.dtype == "string"
+    assert col.mostly == "int"
+    assert col.mostly_count == 3
+    assert col.outliers == [("oops", 1)]
+
+
+def test_a_numeric_column_reports_no_near_miss():
+    col = profile_rows(["v"], [["1"], ["2"]]).columns[0]
+    assert col.mostly is None
+    assert col.outliers == []
+
+
+def test_nulls_are_not_outliers():
+    # N/A is a null, and a null is already counted as one. Reporting it again
+    # as the reason the column is not an int would be the same fact twice.
+    col = profile_rows(["v"], [["1"], ["2"], ["N/A"], ["nope"]]).columns[0]
+    assert col.nulls == 1
+    assert col.outliers == [("nope", 1)]

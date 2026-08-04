@@ -12,7 +12,7 @@ import math
 import statistics
 from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Iterable, Optional, Sequence, Union
+from typing import Callable, Iterable, Optional, Sequence, Union
 
 # Version of the JSON payload produced by ``Profile.to_dict``. Bumped whenever a
 # key is renamed, removed, or changes meaning, so a consumer can detect the
@@ -103,6 +103,68 @@ def infer_type(values: Sequence[str]) -> str:
     return "string"
 
 
+# The candidate types a column can nearly be, in the order infer_type tries
+# them. Order matters on a tie: every int also parses as a float, so the two
+# candidates score equally on a clean integer column and the more specific one
+# has to win.
+_CANDIDATES: tuple[tuple[str, Callable[[str], bool]], ...] = (
+    ("bool", lambda v: v.lower() in _TRUE or v.lower() in _FALSE),
+    ("int", _try_int),
+    ("float", _try_float),
+    ("date", _try_date),
+)
+
+# How much of a column has to fit a type before the misfits are worth naming.
+# Below half there is no majority to be the exception to, and a column that is
+# 30% numeric is a text column rather than a numeric one with dirt in it.
+_NEAR_MISS_FLOOR = 0.5
+
+
+def near_miss(present: Sequence[str], limit: int = 3) -> tuple[str | None, int, list[tuple[str, int]]]:
+    """The type a string column *almost* is, and the values stopping it.
+
+    A column takes a type only if every value fits, which is the right rule —
+    silently coercing away the values that do not fit is how a profiler starts
+    lying. But it leaves the most common real question unanswered: a column
+    reads `string` when it was supposed to be `int`, and the profile does not
+    say which of ten thousand values is responsible. Finding that out means
+    grepping, and the answer is usually two rows with `N/A ` or a stray label.
+
+    Returns the best-fitting candidate type, how many values fit it, and the
+    most common values that do not, or (None, 0, []) when the column is not
+    close to any type.
+    """
+    if not present:
+        return None, 0, []
+
+    best_type: str | None = None
+    best_fit = 0
+    for name, fits in _CANDIDATES:
+        n = sum(1 for v in present if fits(v))
+        # Strictly greater, so an earlier and more specific candidate keeps a
+        # tie: an all-integer column is int, not float.
+        if n > best_fit:
+            best_type, best_fit = name, n
+
+    if best_type is None or best_fit == len(present):
+        # Either nothing fits anything, or everything fits — and if everything
+        # fits, infer_type already gave the column that type and there is no
+        # near miss to report.
+        return None, 0, []
+    if best_fit < len(present) * _NEAR_MISS_FLOOR:
+        return None, 0, []
+
+    fits = dict(_CANDIDATES)[best_type]
+    counts: dict[str, int] = {}
+    for v in present:
+        if not fits(v):
+            counts[v] = counts.get(v, 0) + 1
+    # Same ordering rule as `top`: commonest first, then alphabetical, so two
+    # runs over one file print the same thing.
+    ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return best_type, best_fit, ordered[:limit]
+
+
 @dataclass
 class ColumnProfile:
     name: str
@@ -122,6 +184,10 @@ class ColumnProfile:
     p75: float | None = None
     # string/bool: most common values as (value, count), descending then by value
     top: list[tuple[str, int]] = field(default_factory=list)
+    # string only: the type this column almost is, and what is stopping it.
+    mostly: str | None = None
+    mostly_count: int = 0
+    outliers: list[tuple[str, int]] = field(default_factory=list)
 
     @property
     def null_pct(self) -> float:
@@ -160,6 +226,9 @@ class Profile:
                     "p25": c.p25,
                     "p75": c.p75,
                     "top": [{"value": v, "count": n} for v, n in c.top],
+                    "mostly": c.mostly,
+                    "mostly_count": c.mostly_count,
+                    "outliers": [{"value": v, "count": n} for v, n in c.outliers],
                 }
                 for c in self.columns
             ],
@@ -259,6 +328,8 @@ def _profile_column(name: str, values: Sequence[str], top_n: int) -> ColumnProfi
         # deterministic ordering: by count desc, then value asc
         ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
         col.top = ordered[:top_n]
+        if dtype == "string":
+            col.mostly, col.mostly_count, col.outliers = near_miss(present)
 
     return col
 

@@ -78,6 +78,11 @@ csvpeek data.csv --no-color      # plain text
   standard deviation.
 - **Text/bool columns**: unique count and the most common values (ties broken
   alphabetically, so runs are reproducible).
+- **Near misses**: a `string` column that is mostly one type says so, and names
+  the values stopping it — `mostly int, 2 not: "twelve", "x"`. This is the
+  question a profile usually raises and rarely answers: the column was supposed
+  to be a number, and finding the two rows that ruined it otherwise means
+  grepping.
 
 ## Library
 

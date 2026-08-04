@@ -168,3 +168,36 @@ def test_non_finite_value_exits_3(capsys, tmp_path, value):
     assert main([str(path), "--json"]) == 3
     err = capsys.readouterr().err
     assert "column 'v' contains a value that is not a finite number" in err
+
+
+def test_near_miss_appears_in_the_table(capsys, tmp_path):
+    f = tmp_path / "n.csv"
+    f.write_text("qty\n1\n2\n3\ntwelve\n", encoding="utf-8")
+    assert main([str(f), "--no-color"]) == 0
+    out = capsys.readouterr().out
+    assert "mostly int" in out
+    # Quoted, because the value is arbitrary text in a comma-separated list.
+    assert '"twelve"' in out
+
+
+def test_a_capped_outlier_list_says_it_is_capped(capsys, tmp_path):
+    f = tmp_path / "n.csv"
+    f.write_text("v\n1\n2\n3\n4\n5\n6\na\nb\nc\nd\n", encoding="utf-8")
+    assert main([str(f), "--no-color"]) == 0
+    out = capsys.readouterr().out
+    assert "4 not:" in out
+    # A truncated list that looks complete is worse than no list.
+    assert "…" in out
+
+
+def test_the_capped_marker_has_an_ascii_form():
+    # --no-color turns off colour, not glyphs: those are chosen by what the
+    # output stream can encode. A cp1252 console gets ASCII_GLYPHS, and the
+    # marker has to survive that or printing raises instead of degrading.
+    from csvpeek.cli import ASCII_GLYPHS, _column_summary
+    from csvpeek.core import profile_rows
+
+    col = profile_rows(["v"], [[str(i)] for i in range(6)] + [["a"], ["b"], ["c"], ["d"]]).columns[0]
+    line = _column_summary(col, ASCII_GLYPHS)
+    assert "..." in line
+    assert "…" not in line

@@ -110,6 +110,9 @@ except ProfileError as exc:
 | `mean`, `stdev` | `float \| None` | numeric only |
 | `p25`, `p75` | `float \| None` | numeric with ≥2 values |
 | `top` | `list[tuple[str, int]]` | non-numeric, `(value, count)` |
+| `mostly` | `str \| None` | `string` only: the type the column nearly has |
+| `mostly_count` | `int` | how many values fit `mostly` |
+| `outliers` | `list[tuple[str, int]]` | the values that do not, `(value, count)` |
 
 Fields that do not apply to a column are `None`, or `[]` for `top`, never zero.
 `None` means *not applicable*, so treating it as `0` will silently invent data.

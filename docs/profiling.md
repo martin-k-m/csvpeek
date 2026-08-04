@@ -137,3 +137,33 @@ instead: the most common values as `(value, count)`, ordered by count descending
 and then by value ascending. That secondary sort is what makes ties reproducible.
 Without it the output would depend on dictionary insertion order. `-t/--top`
 controls how many are kept.
+
+## The type a column almost has
+
+A column takes a type only if *every* non-null value fits. That rule is right —
+coercing away the values that do not fit is how a profiler starts lying — but on
+its own it leaves the most common real question unanswered. A column reads
+`string` when it was meant to be `int`, and nothing says which of ten thousand
+values is responsible. Finding out means grepping, and the answer is almost
+always two rows with a stray label in them.
+
+So a `string` column also reports the type it nearly is:
+
+```
+qty  string  0  6  60 (2), 10 (1), 20 (1) · mostly int, 2 not: "twelve", "x"
+```
+
+The rules:
+
+- Candidates are tried in the same order as inference: `bool`, `int`, `float`,
+  `date`. On a tie the earlier one wins, because every int also parses as a
+  float and an all-integer column should not be described as a float.
+- A candidate has to fit **more than half** the non-null values. Below that
+  there is no majority for the rest to be exceptions to, and a column that is
+  30% numeric is text rather than a numeric column with dirt in it.
+- Nulls are never outliers. `N/A` is already counted as a null, and naming it
+  again as the reason the column is not an int is the same fact twice.
+- At most three offending values are listed, commonest first and then
+  alphabetical, with a trailing `…` when there are more. A truncated list that
+  looks complete is worse than no list.
+- Numeric columns never report one: they already have their type.

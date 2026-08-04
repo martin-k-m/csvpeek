@@ -9,7 +9,7 @@ from .core import (
     profile_file,
 )
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __all__ = [
     "SCHEMA_VERSION",
     "ColumnProfile",
