@@ -3,6 +3,14 @@
 All notable changes to csvpeek are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-08-06
+
+### Changed
+
+- **A column that nearly has a type now says what stops it**: reporting a column
+  as text when 999 of 1000 values are numbers is true and useless. The profile
+  names the values that broke it, which is almost always where the problem is.
+
 ## [1.0.0] - 2026-08-03
 
 The JSON output is versioned and self-consistent, and every input csvpeek cannot summarise now fails with a reason instead of a traceback.
