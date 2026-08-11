@@ -6,6 +6,15 @@ All notable changes to csvpeek are documented here. This project follows
 ## [Unreleased]
 
 ### Added
+- **A numeric histogram** for every `int` and `float` column: the values bucketed
+  into ten evenly spaced bins, or one bin when they are all identical. The table
+  and Markdown output render it as a sparkline after `sd`; `--json` reports the
+  raw `edges` and `counts` under a `histogram` key. The key is additive, so the
+  JSON `schema` stays `1` and existing consumers are untouched. Nulls and the
+  non-finite guard are respected, and the binning is deterministic.
+- **Select columns** with `-c/--columns a,b,c`: profile only the named columns,
+  in the order given. An unknown column name fails with exit `3` and a message
+  listing what is available.
 - **Read from standard input** with `-` as the file, so csvpeek fits into a pipe:
   `cat data.csv | csvpeek -`. Delimiter sniffing, a UTF-8 BOM, and every flag
   behave the same as they do for a file. A non-UTF-8 or unparseable stream fails

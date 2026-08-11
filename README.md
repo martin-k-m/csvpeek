@@ -20,10 +20,10 @@ $ csvpeek examples/people.csv
   column  type      nulls  unique  summary
   ────────────────────────────────────────
   name    string        0       6  Ann (1), Bob (1), Cara (1), Dan (1), Eve (1)
-  age     int     1 (16.7%)       4  min 22 · p25 25.5 · median 29 · p75 37.5 · max 41 · mean 31 · sd 6.2929
+  age     int     1 (16.7%)       4  min 22 · p25 25.5 · median 29 · p75 37.5 · max 41 · mean 31 · sd 6.2929 · hist ▅▁▁█▁▁▅▁▁▅
   city    string        0       3  Santa Cruz (3), Brentwood (2), Oakland (1)
   active  bool          0       2  true (4), false (2)
-  score   float   1 (16.7%)       5  min 6.5 · p25 6.8 · median 8.8 · p75 9.2 · max 9.4 · mean 8.16 · sd 1.143
+  score   float   1 (16.7%)       5  min 6.5 · p25 6.8 · median 8.8 · p75 9.2 · max 9.4 · mean 8.16 · sd 1.143 · hist █▁█▁▁▁▁███
 ```
 
 ## Install
@@ -52,6 +52,7 @@ cat data.csv | csvpeek -         # read from standard input
 csvpeek data.tsv -d $'\t'        # tab-separated
 csvpeek data.csv --top 10        # more top values for text columns
 csvpeek big.csv -n 10000         # sample the first 10k rows of a large file
+csvpeek data.csv -c age,city     # profile only these columns, in this order
 csvpeek data.csv --format md     # a Markdown table to paste into a PR
 csvpeek data.csv --json          # machine-readable output
 csvpeek data.csv --no-color      # plain text
@@ -62,6 +63,7 @@ csvpeek data.csv --no-color      # plain text
 | `-d`, `--delimiter` | Field delimiter (default: auto-detect `,` `;` tab `\|`) |
 | `-t`, `--top N` | Show top *N* values for text columns (default 5) |
 | `-n`, `--limit ROWS` | Only read the first *ROWS* data rows (sample large files) |
+| `-c`, `--columns A,B,C` | Profile only these columns, comma-separated, in the order given |
 | `--format {table,md,json}` | Output format: `table` (default), `md` (Markdown), or `json` |
 | `--json` | Shortcut for `--format json` |
 | `--no-color` | Disable colored output |
@@ -76,7 +78,8 @@ csvpeek data.csv --no-color      # plain text
 - **Nulls**: empty, `NA`, `N/A`, `null`, `none`, `nan`, `nil` (case-insensitive), with a
   percentage.
 - **Numeric columns**: min, 25th/50th/75th percentiles, max, mean, and population
-  standard deviation.
+  standard deviation, plus a small **histogram** of the values bucketed into ten
+  bins, shown as a sparkline in the table and as `edges`/`counts` in the JSON.
 - **Text/bool columns**: unique count and the most common values (ties broken
   alphabetically, so runs are reproducible).
 - **Near misses**: a `string` column that is mostly one type says so, and names

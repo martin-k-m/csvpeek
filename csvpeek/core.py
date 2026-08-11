@@ -21,6 +21,11 @@ from typing import Callable, Iterable, Optional, Sequence, TextIO, Union
 # change up front instead of discovering it one missing field at a time.
 SCHEMA_VERSION = 1
 
+# How many bins the numeric histogram uses when a column spans a range. A column
+# whose values are all identical collapses to a single bin instead. Kept small
+# and fixed so the sparkline stays one glanceable row and two runs match.
+HIST_BINS = 10
+
 # A statistic is an int only where an int column can produce one exactly; see
 # ``_profile_column``.
 Number = Union[int, float]
@@ -168,6 +173,53 @@ def near_miss(present: Sequence[str], limit: int = 3) -> tuple[str | None, int, 
 
 
 @dataclass
+class Histogram:
+    """The shape of a numeric column, as bin counts over evenly spaced bins.
+
+    ``edges`` has one more entry than ``counts``: ``edges[i]`` and ``edges[i+1]``
+    bound bin ``i``. Bins are half-open ``[edges[i], edges[i+1])`` except the last,
+    which is closed so the maximum value lands inside it rather than falling off
+    the end. A column whose values are all equal has a single bin.
+    """
+
+    edges: list[float]
+    counts: list[int]
+
+
+def _histogram(nums: Sequence[float]) -> Histogram:
+    """Bucket already-parsed, finite numbers into ``HIST_BINS`` even bins.
+
+    The caller passes the same float readings the statistics use, so the non-null
+    handling and the non-finite guard in ``_profile_column`` already apply: nulls
+    never reach here, and an infinity would have been rejected before this runs.
+    The bin an exact value lands in is computed the same way every time, so the
+    counts are deterministic.
+    """
+    lo = min(nums)
+    hi = max(nums)
+    if hi == lo:
+        # No spread to divide, so one bin holds everything. Reporting ten bins
+        # with nine empty would imply a range that is not there.
+        return Histogram(edges=[lo, hi], counts=[len(nums)])
+
+    width = (hi - lo) / HIST_BINS
+    counts = [0] * HIST_BINS
+    for v in nums:
+        idx = int((v - lo) / width)
+        # The maximum value divides out to exactly HIST_BINS; clamp it into the
+        # last bin so the closed top edge holds it. Guard the low side too against
+        # a float rounding a hair below lo.
+        if idx >= HIST_BINS:
+            idx = HIST_BINS - 1
+        elif idx < 0:
+            idx = 0
+        counts[idx] += 1
+    edges = [lo + i * width for i in range(HIST_BINS + 1)]
+    edges[-1] = hi  # exact, rather than lo + HIST_BINS*width and its rounding
+    return Histogram(edges=edges, counts=counts)
+
+
+@dataclass
 class ColumnProfile:
     name: str
     dtype: str
@@ -190,6 +242,8 @@ class ColumnProfile:
     mostly: str | None = None
     mostly_count: int = 0
     outliers: list[tuple[str, int]] = field(default_factory=list)
+    # numeric-only: the column's distribution as evenly spaced bin counts.
+    histogram: Histogram | None = None
 
     @property
     def null_pct(self) -> float:
@@ -202,14 +256,21 @@ class Profile:
     rows: int
     columns: list[ColumnProfile]
 
-    def to_dict(self) -> dict:
+    def to_dict(self, histograms: bool = False) -> dict:
         """The JSON-ready form: a schema version, then the profile itself.
 
         Every column key is named after the attribute it comes from. ``top`` is
         the one field that changes shape, from pairs to objects, because JSON
         has no tuple.
+
+        ``histograms`` opts into an extra ``"histogram"`` key on each column: an
+        object with ``edges`` and ``counts`` for a numeric column, ``null`` for
+        the rest. It is off by default so the payload above stays exactly what it
+        was, which is why ``schema`` does not move: the key is additive and
+        optional, and a consumer that does not recognise it can ignore it. The
+        CLI turns it on for ``--json``.
         """
-        return {
+        out = {
             "schema": SCHEMA_VERSION,
             "rows": self.rows,
             "columns": [
@@ -235,6 +296,17 @@ class Profile:
                 for c in self.columns
             ],
         }
+        if histograms:
+            for cell, c in zip(out["columns"], self.columns):
+                cell["histogram"] = (
+                    None
+                    if c.histogram is None
+                    else {
+                        "edges": [round(e, 4) for e in c.histogram.edges],
+                        "counts": c.histogram.counts,
+                    }
+                )
+        return out
 
 
 def _reject_non_finite(name: str, present: Sequence[str], nums: Sequence[float]) -> None:
@@ -319,6 +391,9 @@ def _profile_column(name: str, values: Sequence[str], top_n: int) -> ColumnProfi
             raise ProfileError(
                 f"column {name!r} has values too large to summarise: {exc}"
             ) from exc
+        # Same finite float readings the statistics used, so the guard above has
+        # already rejected any infinity before it reaches the bins.
+        col.histogram = _histogram(nums)
         col.mean = None if col.mean is None else round(col.mean, 4)
         col.stdev = None if col.stdev is None else round(col.stdev, 4)
         col.p25 = None if col.p25 is None else round(col.p25, 4)
@@ -336,28 +411,54 @@ def _profile_column(name: str, values: Sequence[str], top_n: int) -> ColumnProfi
     return col
 
 
+def _select_indices(header: Sequence[str], select: Sequence[str]) -> list[int]:
+    """The file-order positions of the named columns, in the order named.
+
+    Raises ``ProfileError`` naming every column that is not in the header, before
+    a single data row is read, so a typo fails fast and says what is available
+    rather than profiling nothing. A name repeated in the header resolves to its
+    first occurrence.
+    """
+    pos: dict[str, int] = {}
+    for i, name in enumerate(header):
+        pos.setdefault(name, i)
+    unknown = [name for name in select if name not in pos]
+    if unknown:
+        missing = ", ".join(repr(u) for u in unknown)
+        available = ", ".join(repr(h) for h in header) or "(none)"
+        raise ProfileError(
+            f"no such column: {missing}; available columns are {available}"
+        )
+    return [pos[name] for name in select]
+
+
 def profile_rows(
     header: Sequence[str],
     rows: Iterable[Sequence[str]],
     top_n: int = 5,
     limit: Optional[int] = None,
+    select: Optional[Sequence[str]] = None,
 ) -> Profile:
     """Profile already-parsed rows against a header.
 
     ``limit`` caps how many data rows are read, useful for sampling a large
-    file. ``None`` reads everything.
+    file. ``None`` reads everything. ``select`` restricts profiling to the named
+    columns, in the order named; ``None`` profiles every column. An unknown name
+    raises ``ProfileError`` before any row is read.
     """
-    columns: list[list[str]] = [[] for _ in header]
+    chosen = list(range(len(header))) if select is None else _select_indices(header, select)
+
+    columns: list[list[str]] = [[] for _ in chosen]
     n_rows = 0
     for row in rows:
         if limit is not None and n_rows >= limit:
             break
         n_rows += 1
-        for i in range(len(header)):
-            columns[i].append(row[i] if i < len(row) else "")
+        for j, ci in enumerate(chosen):
+            columns[j].append(row[ci] if ci < len(row) else "")
 
     profiles = [
-        _profile_column(name, columns[i], top_n) for i, name in enumerate(header)
+        _profile_column(header[ci], columns[j], top_n) for j, ci in enumerate(chosen)
     ]
     return Profile(rows=n_rows, columns=profiles)
 
@@ -371,7 +472,11 @@ def sniff_delimiter(sample: str) -> str:
 
 
 def _profile_stream(
-    fh: TextIO, delimiter: Optional[str], top_n: int, limit: Optional[int]
+    fh: TextIO,
+    delimiter: Optional[str],
+    top_n: int,
+    limit: Optional[int],
+    select: Optional[Sequence[str]] = None,
 ) -> Profile:
     """Profile an open text stream. Shared by the file and stdin readers.
 
@@ -394,11 +499,15 @@ def _profile_stream(
         header = next(reader)
     except StopIteration:
         return Profile(rows=0, columns=[])
-    return profile_rows(header, reader, top_n=top_n, limit=limit)
+    return profile_rows(header, reader, top_n=top_n, limit=limit, select=select)
 
 
 def profile_file(
-    path: str, delimiter: Optional[str] = None, top_n: int = 5, limit: Optional[int] = None
+    path: str,
+    delimiter: Optional[str] = None,
+    top_n: int = 5,
+    limit: Optional[int] = None,
+    select: Optional[Sequence[str]] = None,
 ) -> Profile:
     """Read a CSV file from ``path`` and profile it.
 
@@ -423,13 +532,13 @@ def profile_file(
                 "there); convert it to UTF-8 first"
             ) from exc
         try:
-            return _profile_stream(io.StringIO(text, newline=""), delimiter, top_n, limit)
+            return _profile_stream(io.StringIO(text, newline=""), delimiter, top_n, limit, select)
         except csv.Error as exc:
             raise ProfileError(f"standard input could not be parsed as CSV: {exc}") from exc
 
     try:
         with open(path, newline="", encoding="utf-8-sig") as fh:
-            return _profile_stream(fh, delimiter, top_n, limit)
+            return _profile_stream(fh, delimiter, top_n, limit, select)
     except UnicodeDecodeError as exc:
         bad = exc.object[exc.start]
         raise ProfileError(

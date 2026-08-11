@@ -138,6 +138,30 @@ and then by value ascending. That secondary sort is what makes ties reproducible
 Without it the output would depend on dictionary insertion order. `-t/--top`
 controls how many are kept.
 
+## The numeric histogram
+
+Every `int` and `float` column also gets a histogram: its values bucketed into
+evenly spaced bins so the shape of the column is visible at a glance, not just its
+summary statistics.
+
+The rules:
+
+- The bins span `minimum` to `maximum`. A column with any spread uses **ten**
+  bins of equal width; a column whose values are all identical uses a **single**
+  bin holding them all, because there is no range to divide.
+- Bins are half-open, `[edge, next_edge)`, except the **last**, which is closed so
+  the maximum value is counted in it rather than falling off the end.
+- The same finite, non-null readings the statistics use feed the bins. Nulls
+  never reach it, and a non-finite value is rejected before any histogram is
+  built, so there is nothing here the statistics did not already accept.
+- Binning is deterministic: the bin an exact value lands in is computed the same
+  way every run, so two runs over one file produce the same counts.
+
+The `table` and `md` output render the counts as a one-row sparkline after `sd`,
+with each bar scaled to the fullest bin. `--json` reports the raw `edges` and
+`counts` under a `histogram` key, `edges` being one longer than `counts`. See
+[cli.md](cli.md#numeric-histogram) for the rendering and the JSON shape.
+
 ## The type a column almost has
 
 A column takes a type only if *every* non-null value fits. That rule is right —

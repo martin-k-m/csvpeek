@@ -33,10 +33,14 @@ class Glyphs(NamedTuple):
     times: str
     dot: str
     ellipsis: str
+    # Eight height levels, low to high, for the numeric histogram sparkline.
+    # A single string so ``glyphs_for`` can test it for encodability alongside
+    # the rest, and so it moves to ASCII as one set rather than per character.
+    bars: str
 
 
-UNICODE_GLYPHS = Glyphs(rule="─", times="×", dot="·", ellipsis="…")
-ASCII_GLYPHS = Glyphs(rule="-", times="x", dot="|", ellipsis="...")
+UNICODE_GLYPHS = Glyphs(rule="─", times="×", dot="·", ellipsis="…", bars="▁▂▃▄▅▆▇█")
+ASCII_GLYPHS = Glyphs(rule="-", times="x", dot="|", ellipsis="...", bars=".:-=+*#@")
 
 
 def _stream_encoding(stream: TextIO) -> Optional[str]:
@@ -104,21 +108,39 @@ def _fmt_num(n) -> str:
     return str(n)
 
 
+def _sparkline(counts: list[int], bars: str) -> str:
+    """A one-row bar of bin counts, each scaled to a height character in ``bars``.
+
+    Heights are relative to the fullest bin, so the tallest bar is always the top
+    glyph and an empty bin is always the bottom one. ``bars`` is chosen by what
+    the output stream can encode, so this degrades to ASCII on a cp1252 console
+    the same way the rest of the table does.
+    """
+    if not counts:
+        return ""
+    top = max(counts)
+    if top == 0:
+        return bars[0] * len(counts)
+    last = len(bars) - 1
+    return "".join(bars[round(c / top * last)] for c in counts)
+
+
 def _column_summary(col: ColumnProfile, glyphs: Glyphs = UNICODE_GLYPHS) -> str:
     """The one-line, color-free summary for a column (shared by all renderers)."""
     if col.dtype in ("int", "float"):
         sep = f" {glyphs.dot} "
-        return sep.join(
-            (
-                f"min {_fmt_num(col.minimum)}",
-                f"p25 {_fmt_num(col.p25)}",
-                f"median {_fmt_num(col.median)}",
-                f"p75 {_fmt_num(col.p75)}",
-                f"max {_fmt_num(col.maximum)}",
-                f"mean {_fmt_num(col.mean)}",
-                f"sd {_fmt_num(col.stdev)}",
-            )
-        )
+        parts = [
+            f"min {_fmt_num(col.minimum)}",
+            f"p25 {_fmt_num(col.p25)}",
+            f"median {_fmt_num(col.median)}",
+            f"p75 {_fmt_num(col.p75)}",
+            f"max {_fmt_num(col.maximum)}",
+            f"mean {_fmt_num(col.mean)}",
+            f"sd {_fmt_num(col.stdev)}",
+        ]
+        if col.histogram is not None:
+            parts.append(f"hist {_sparkline(col.histogram.counts, glyphs.bars)}")
+        return sep.join(parts)
     if col.top:
         summary = ", ".join(f"{v} ({n})" for v, n in col.top)
         note = _near_miss_note(col, glyphs)
@@ -215,6 +237,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="show top N values for text columns (default: 5)")
     p.add_argument("-n", "--limit", type=int, default=None, metavar="ROWS",
                    help="only read the first ROWS data rows (sample large files)")
+    p.add_argument("-c", "--columns", default=None, metavar="A,B,C",
+                   help="profile only these columns, comma-separated, in the order given")
     p.add_argument("--format", choices=["table", "md", "json"], default="table",
                    help="output format: table (default), md (Markdown), or json")
     p.add_argument("--json", action="store_true", help="shortcut for --format json")
@@ -230,8 +254,17 @@ def _fail(message: str, code: int) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    select = None
+    if args.columns is not None:
+        select = [name.strip() for name in args.columns.split(",") if name.strip()]
+        if not select:
+            return _fail("--columns needs at least one column name", _EXIT_BAD_INPUT)
+
     try:
-        profile = profile_file(args.file, delimiter=args.delimiter, top_n=args.top, limit=args.limit)
+        profile = profile_file(
+            args.file, delimiter=args.delimiter, top_n=args.top, limit=args.limit, select=select
+        )
     except FileNotFoundError:
         return _fail(f"file not found: {args.file}", _EXIT_BAD_INPUT)
     except OSError as exc:
@@ -243,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
     fmt = "json" if args.json else args.format
     if fmt == "json":
         # json.dumps escapes non-ASCII by default, so this needs no glyph care.
-        _write(json.dumps(profile.to_dict(), indent=2), sys.stdout)
+        _write(json.dumps(profile.to_dict(histograms=True), indent=2), sys.stdout)
     elif fmt == "md":
         _write(render_markdown(profile, glyphs), sys.stdout)
     else:

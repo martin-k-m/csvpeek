@@ -16,7 +16,7 @@ for col in profile.columns:
 
 ## Functions
 
-### `profile_file(path, delimiter=None, top_n=5, limit=None) -> Profile`
+### `profile_file(path, delimiter=None, top_n=5, limit=None, select=None) -> Profile`
 
 Read and profile a CSV file.
 
@@ -26,6 +26,7 @@ Read and profile a CSV file.
 | `delimiter` | Field delimiter. `None` auto-detects, see [profiling.md](profiling.md#reading-the-file) |
 | `top_n` | How many most-common values to keep per non-numeric column |
 | `limit` | Read only the first N data rows. `None` reads everything |
+| `select` | Sequence of column names to profile, in the order given. `None` profiles every column. An unknown name raises `ProfileError` before any row is read |
 
 Raises `FileNotFoundError` if the path does not exist, and `OSError` for other
 read failures. Raises [`ProfileError`](#profileerror) if the file opens but
@@ -33,14 +34,15 @@ cannot be profiled: the bytes are not UTF-8, the CSV reader refuses them, or a
 numeric column holds a non-finite value. A file with no header row returns
 `Profile(rows=0, columns=[])`.
 
-### `profile_rows(header, rows, top_n=5, limit=None) -> Profile`
+### `profile_rows(header, rows, top_n=5, limit=None, select=None) -> Profile`
 
 Profile rows you have already parsed. `header` is a sequence of column names and
 `rows` is any iterable of sequences: a `csv.reader`, a list of lists, or a
-generator. Use this when the data is not a file on disk.
+generator. Use this when the data is not a file on disk. `select`, when given,
+restricts the profile to the named columns, in the order named.
 
 Raises [`ProfileError`](#profileerror) if a numeric column contains a value that
-is not finite.
+is not finite, or if `select` names a column not in `header`.
 
 ### `infer_type(values) -> str`
 
@@ -113,6 +115,7 @@ except ProfileError as exc:
 | `mostly` | `str \| None` | `string` only: the type the column nearly has |
 | `mostly_count` | `int` | how many values fit `mostly` |
 | `outliers` | `list[tuple[str, int]]` | the values that do not, `(value, count)` |
+| `histogram` | `Histogram \| None` | numeric only: the value distribution as bins |
 
 Fields that do not apply to a column are `None`, or `[]` for `top`, never zero.
 `None` means *not applicable*, so treating it as `0` will silently invent data.
@@ -122,10 +125,29 @@ An `int` column answers with `int`s wherever it can do so exactly, so `minimum`
 and `maximum` are `int`s there, and so is `median` when the count is odd. See
 [profiling.md](profiling.md#statistics) for the rule and its one edge case.
 
+### `Histogram`
+
+The numeric distribution attached to `ColumnProfile.histogram`, and `None` for
+every non-numeric column.
+
+| Attribute | Type | Meaning |
+| :-- | :-- | :-- |
+| `edges` | `list[float]` | Bin boundaries. One longer than `counts`; `edges[i]` and `edges[i+1]` bound bin `i` |
+| `counts` | `list[int]` | Values per bin |
+
+Values are bucketed into ten evenly spaced bins, or a single bin when every value
+is identical. Bins are half-open `[edges[i], edges[i+1])` except the last, which
+is closed so the maximum value is counted rather than dropped. The same finite,
+non-null readings the statistics use feed the bins, so nulls never appear and a
+non-finite value is rejected before a histogram is built.
+
 ## JSON shape
 
-`Profile.to_dict()` is what `--json` prints: a schema version, then the profile.
-Every column key is named exactly as the attribute it comes from.
+`Profile.to_dict(histograms=False)` is the profile: a schema version, then the
+columns. Every column key is named exactly as the attribute it comes from. Pass
+`histograms=True` to add a `"histogram"` key to each column; `--json` does this.
+The key is additive and optional, so `schema` does not move for it: an object
+with `edges` and `counts` for a numeric column, `null` for the rest.
 
 ```json
 {
@@ -146,7 +168,11 @@ Every column key is named exactly as the attribute it comes from.
       "stdev": 6.2929,
       "p25": 25.5,
       "p75": 37.5,
-      "top": []
+      "top": [],
+      "histogram": {
+        "edges": [22.0, 23.9, 25.8, 27.7, 29.6, 31.5, 33.4, 35.3, 37.2, 39.1, 41.0],
+        "counts": [1, 0, 1, 1, 0, 0, 0, 1, 0, 1]
+      }
     }
   ]
 }
