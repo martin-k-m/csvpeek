@@ -208,7 +208,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="csvpeek",
         description="Profile a CSV file from the terminal: types, nulls, and stats. Zero dependencies.",
     )
-    p.add_argument("file", help="path to a CSV file")
+    p.add_argument("file", help="path to a CSV file, or - to read from standard input")
     p.add_argument("-d", "--delimiter", default=None,
                    help="field delimiter (default: auto-detect , ; tab |)")
     p.add_argument("-t", "--top", type=int, default=5, metavar="N",

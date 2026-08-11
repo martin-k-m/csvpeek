@@ -22,7 +22,7 @@ Read and profile a CSV file.
 
 | Argument | Meaning |
 | :-- | :-- |
-| `path` | Path to the file. Opened as `utf-8-sig` |
+| `path` | Path to the file, or `-` to read standard input. Opened as `utf-8-sig` |
 | `delimiter` | Field delimiter. `None` auto-detects, see [profiling.md](profiling.md#reading-the-file) |
 | `top_n` | How many most-common values to keep per non-numeric column |
 | `limit` | Read only the first N data rows. `None` reads everything |

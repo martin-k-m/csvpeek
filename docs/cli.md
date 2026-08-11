@@ -4,7 +4,10 @@
 csvpeek [options] FILE
 ```
 
-Profiles `FILE` and prints the result. `FILE` is required and positional.
+Profiles `FILE` and prints the result. `FILE` is required and positional. Pass
+`-` to read the CSV from standard input instead of a path, so csvpeek fits into a
+pipe: `cat data.csv | csvpeek -`. Detection, delimiter sniffing and every flag
+work the same on stdin as on a file.
 
 If csvpeek is not on your `PATH`, `python -m csvpeek` is equivalent and needs no
 installation.
@@ -59,6 +62,7 @@ in every case.
 
 ```sh
 csvpeek data.csv                  # profile a CSV
+cat data.csv | csvpeek -          # read from standard input
 csvpeek data.tsv -d $'\t'         # tab-separated
 csvpeek export.csv -d ';'         # semicolon-separated
 csvpeek data.csv --top 10         # more top values for text columns

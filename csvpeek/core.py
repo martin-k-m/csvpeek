@@ -8,11 +8,13 @@ could compute by hand from the column.
 from __future__ import annotations
 
 import csv
+import io
 import math
 import statistics
+import sys
 from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Callable, Iterable, Optional, Sequence, Union
+from typing import Callable, Iterable, Optional, Sequence, TextIO, Union
 
 # Version of the JSON payload produced by ``Profile.to_dict``. Bumped whenever a
 # key is renamed, removed, or changes meaning, so a consumer can detect the
@@ -368,36 +370,66 @@ def sniff_delimiter(sample: str) -> str:
         return ","
 
 
+def _profile_stream(
+    fh: TextIO, delimiter: Optional[str], top_n: int, limit: Optional[int]
+) -> Profile:
+    """Profile an open text stream. Shared by the file and stdin readers.
+
+    The stream must be seekable, because sniffing a delimiter reads a sample and
+    then rewinds. A real file is; the in-memory buffer stdin is read into is too.
+    """
+    if delimiter is None:
+        delimiter = sniff_delimiter(fh.read(8192))
+        fh.seek(0)
+    try:
+        reader = csv.reader(fh, delimiter=delimiter)
+    except TypeError as exc:
+        # csv rejects a delimiter that is not exactly one character with a
+        # TypeError, not a csv.Error, so the caller's handler misses it. -d ";;"
+        # is a user typo and should read as one, not as a crash.
+        raise ProfileError(
+            f"delimiter must be a single character, got {delimiter!r}"
+        ) from exc
+    try:
+        header = next(reader)
+    except StopIteration:
+        return Profile(rows=0, columns=[])
+    return profile_rows(header, reader, top_n=top_n, limit=limit)
+
+
 def profile_file(
     path: str, delimiter: Optional[str] = None, top_n: int = 5, limit: Optional[int] = None
 ) -> Profile:
     """Read a CSV file from ``path`` and profile it.
 
-    ``delimiter`` defaults to auto-detection (comma/semicolon/tab/pipe).
-    ``limit`` optionally samples only the first N data rows.
+    ``path`` may be ``"-"`` to read the CSV from standard input, so csvpeek fits
+    into a pipe (``cat data.csv | csvpeek -``). ``delimiter`` defaults to
+    auto-detection (comma/semicolon/tab/pipe). ``limit`` optionally samples only
+    the first N data rows.
 
     Raises ``ProfileError`` when the bytes are not UTF-8, or when the CSV module
-    refuses the file (an unterminated quote, or a field past its size limit).
+    refuses the input (an unterminated quote, or a field past its size limit).
     """
+    if path == "-":
+        # stdin is not seekable, so read it whole and profile the buffer. The
+        # decode consumes a UTF-8 BOM the same way ``utf-8-sig`` does for a file.
+        raw = sys.stdin.buffer.read()
+        try:
+            text = raw.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            bad = exc.object[exc.start]
+            raise ProfileError(
+                f"standard input is not UTF-8 text (byte 0x{bad:02x} is not valid "
+                "there); convert it to UTF-8 first"
+            ) from exc
+        try:
+            return _profile_stream(io.StringIO(text, newline=""), delimiter, top_n, limit)
+        except csv.Error as exc:
+            raise ProfileError(f"standard input could not be parsed as CSV: {exc}") from exc
+
     try:
         with open(path, newline="", encoding="utf-8-sig") as fh:
-            if delimiter is None:
-                delimiter = sniff_delimiter(fh.read(8192))
-                fh.seek(0)
-            try:
-                reader = csv.reader(fh, delimiter=delimiter)
-            except TypeError as exc:
-                # csv rejects a delimiter that is not exactly one character with
-                # a TypeError, not a csv.Error, so the handler below misses it.
-                # -d ";;" is a user typo and should read as one, not as a crash.
-                raise ProfileError(
-                    f"delimiter must be a single character, got {delimiter!r}"
-                ) from exc
-            try:
-                header = next(reader)
-            except StopIteration:
-                return Profile(rows=0, columns=[])
-            return profile_rows(header, reader, top_n=top_n, limit=limit)
+            return _profile_stream(fh, delimiter, top_n, limit)
     except UnicodeDecodeError as exc:
         bad = exc.object[exc.start]
         raise ProfileError(

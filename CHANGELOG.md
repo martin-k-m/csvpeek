@@ -3,6 +3,14 @@
 All notable changes to csvpeek are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Read from standard input** with `-` as the file, so csvpeek fits into a pipe:
+  `cat data.csv | csvpeek -`. Delimiter sniffing, a UTF-8 BOM, and every flag
+  behave the same as they do for a file. A non-UTF-8 or unparseable stream fails
+  with the same exit `3` and a message naming standard input.
+
 ## [1.1.0] - 2026-08-06
 
 ### Changed

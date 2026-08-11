@@ -48,6 +48,7 @@ python -m csvpeek data.csv
 
 ```sh
 csvpeek data.csv                 # profile a CSV
+cat data.csv | csvpeek -         # read from standard input
 csvpeek data.tsv -d $'\t'        # tab-separated
 csvpeek data.csv --top 10        # more top values for text columns
 csvpeek big.csv -n 10000         # sample the first 10k rows of a large file
