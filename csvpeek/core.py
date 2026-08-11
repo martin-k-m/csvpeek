@@ -130,7 +130,7 @@ _NEAR_MISS_FLOOR = 0.5
 def near_miss(present: Sequence[str], limit: int = 3) -> tuple[str | None, int, list[tuple[str, int]]]:
     """The type a string column *almost* is, and the values stopping it.
 
-    A column takes a type only if every value fits, which is the right rule —
+    A column takes a type only if every value fits, which is the right rule,
     silently coercing away the values that do not fit is how a profiler starts
     lying. But it leaves the most common real question unanswered: a column
     reads `string` when it was supposed to be `int`, and the profile does not
@@ -154,7 +154,7 @@ def near_miss(present: Sequence[str], limit: int = 3) -> tuple[str | None, int, 
             best_type, best_fit = name, n
 
     if best_type is None or best_fit == len(present):
-        # Either nothing fits anything, or everything fits — and if everything
+        # Either nothing fits anything, or everything fits, and if everything
         # fits, infer_type already gave the column that type and there is no
         # near miss to report.
         return None, 0, []

@@ -164,8 +164,8 @@ with each bar scaled to the fullest bin. `--json` reports the raw `edges` and
 
 ## The type a column almost has
 
-A column takes a type only if *every* non-null value fits. That rule is right —
-coercing away the values that do not fit is how a profiler starts lying — but on
+A column takes a type only if *every* non-null value fits. That rule is right,
+coercing away the values that do not fit is how a profiler starts lying, but on
 its own it leaves the most common real question unanswered. A column reads
 `string` when it was meant to be `int`, and nothing says which of ten thousand
 values is responsible. Finding out means grepping, and the answer is almost
