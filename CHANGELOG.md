@@ -20,6 +20,11 @@ All notable changes to csvpeek are documented here. This project follows
   behave the same as they do for a file. A non-UTF-8 or unparseable stream fails
   with the same exit `3` and a message naming standard input.
 
+### Changed
+- CI now also runs on Windows (Python 3.9 and 3.12), so the `\r\n` line-ending
+  path a CSV tool must handle is exercised rather than assumed. The CLI smoke
+  test is pinned to bash for a consistent redirect across runners.
+
 ## [1.1.0] - 2026-08-06
 
 ### Changed

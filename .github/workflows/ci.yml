@@ -7,11 +7,20 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        # Windows matters for a CSV tool: its \r\n line endings are exactly the
+        # code path a Linux-only matrix never exercises. Kept to the floor and
+        # current release there to hold the job count down.
+        os: [ubuntu-latest]
         python-version: ["3.9", "3.10", "3.11", "3.12"]
+        include:
+          - os: windows-latest
+            python-version: "3.9"
+          - os: windows-latest
+            python-version: "3.12"
     steps:
       - uses: actions/checkout@v7
       - name: Set up Python ${{ matrix.python-version }}
@@ -25,6 +34,9 @@ jobs:
       - name: Run tests
         run: pytest -q
       - name: Smoke test CLI
+        # Pinned to bash so the `> /dev/null` redirect works the same on the
+        # Windows runners (Git Bash is preinstalled) as on Linux.
+        shell: bash
         run: |
           csvpeek examples/people.csv --no-color
           csvpeek examples/people.csv --json > /dev/null
