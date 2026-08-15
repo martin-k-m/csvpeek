@@ -16,22 +16,24 @@ for col in profile.columns:
 
 ## Functions
 
-### `profile_file(path, delimiter=None, top_n=5, limit=None, select=None) -> Profile`
+### `profile_file(path, delimiter=None, top_n=5, limit=None, select=None, encoding="utf-8-sig") -> Profile`
 
 Read and profile a CSV file.
 
 | Argument | Meaning |
 | :-- | :-- |
-| `path` | Path to the file, or `-` to read standard input. Opened as `utf-8-sig` |
+| `path` | Path to the file, or `-` to read standard input |
 | `delimiter` | Field delimiter. `None` auto-detects, see [profiling.md](profiling.md#reading-the-file) |
 | `top_n` | How many most-common values to keep per non-numeric column |
 | `limit` | Read only the first N data rows. `None` reads everything |
 | `select` | Sequence of column names to profile, in the order given. `None` profiles every column. An unknown name raises `ProfileError` before any row is read |
+| `encoding` | Input text encoding. Defaults to `utf-8-sig`: plain UTF-8, with an Excel byte order mark tolerated. Pass `cp1252` or `latin-1` for an export that is not UTF-8 |
 
 Raises `FileNotFoundError` if the path does not exist, and `OSError` for other
 read failures. Raises [`ProfileError`](#profileerror) if the file opens but
-cannot be profiled: the bytes are not UTF-8, the CSV reader refuses them, or a
-numeric column holds a non-finite value. A file with no header row returns
+cannot be profiled: the bytes are not the given encoding, `encoding` is not a
+codec Python knows, the CSV reader refuses them, or a numeric column holds a
+non-finite value. A file with no header row returns
 `Profile(rows=0, columns=[])`.
 
 ### `profile_rows(header, rows, top_n=5, limit=None, select=None) -> Profile`

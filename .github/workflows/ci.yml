@@ -40,3 +40,17 @@ jobs:
         run: |
           csvpeek examples/people.csv --no-color
           csvpeek examples/people.csv --json > /dev/null
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      # The test matrix proves 3.9 still runs the code. This proves nobody is
+      # being told to write syntax it cannot parse: pyproject.toml pins
+      # `target-version = "py39"`, so ruff will not suggest a 3.10+ rewrite and
+      # flags one if it appears.
+      - run: ruff check .

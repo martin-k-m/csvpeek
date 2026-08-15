@@ -7,14 +7,32 @@ could compute by hand from the column.
 
 from __future__ import annotations
 
+import codecs
 import csv
 import io
 import math
 import statistics
 import sys
-from datetime import datetime
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Callable, Iterable, Optional, Sequence, TextIO, Union
+from datetime import datetime
+from typing import Callable, Optional, TextIO, Union
+
+# The csv module's default field limit is 128 KB. It exists so an unterminated
+# quote cannot pull a whole file into one field, not as a statement about how
+# large a legitimate cell is: one embedded JSON document, log line, or base64
+# blob passes it, and profiling would refuse the file rather than describe it.
+# Raised to 10 MB, which is past any cell a person meant to write and still far
+# short of letting one bad quote swallow a large file. Deliberately not
+# ``sys.maxsize``: the limit is stored as a C long, 32-bit on Windows, which
+# rejects anything larger, and a limit that admits everything is not a limit.
+MAX_FIELD_SIZE = 10 * 1024 * 1024
+csv.field_size_limit(MAX_FIELD_SIZE)
+
+# The default input encoding. ``utf-8-sig`` reads plain UTF-8 unchanged and also
+# consumes the byte order mark Excel writes, which would otherwise attach itself
+# to the first column's name.
+DEFAULT_ENCODING = "utf-8-sig"
 
 # Version of the JSON payload produced by ``Profile.to_dict``. Bumped whenever a
 # key is renamed, removed, or changes meaning, so a consumer can detect the
@@ -127,7 +145,9 @@ _CANDIDATES: tuple[tuple[str, Callable[[str], bool]], ...] = (
 _NEAR_MISS_FLOOR = 0.5
 
 
-def near_miss(present: Sequence[str], limit: int = 3) -> tuple[str | None, int, list[tuple[str, int]]]:
+def near_miss(
+    present: Sequence[str], limit: int = 3
+) -> tuple[Optional[str], int, list[tuple[str, int]]]:
     """The type a string column *almost* is, and the values stopping it.
 
     A column takes a type only if every value fits, which is the right rule,
@@ -502,12 +522,31 @@ def _profile_stream(
     return profile_rows(header, reader, top_n=top_n, limit=limit, select=select)
 
 
+def _decode_advice(what: str, exc: UnicodeDecodeError) -> str:
+    """The message for a file whose bytes are not the encoding we read it as.
+
+    "Convert it to UTF-8 first" was the old advice, and it asks the person with
+    the CSV to go find another tool before they can use this one. The encodings
+    named here are the two that a spreadsheet export is when it is not UTF-8, so
+    the next command to type is in the message.
+    """
+    bad = exc.object[exc.start]
+    # Upper-cased so the codec's own lowercase name reads as the encoding a
+    # person would write down: "is not UTF-8 text", not "is not utf-8 text".
+    return (
+        f"{what} is not {exc.encoding.upper()} text (byte 0x{bad:02x} at position "
+        f"{exc.start} is not valid there); try --encoding cp1252 or "
+        "--encoding latin-1"
+    )
+
+
 def profile_file(
     path: str,
     delimiter: Optional[str] = None,
     top_n: int = 5,
     limit: Optional[int] = None,
     select: Optional[Sequence[str]] = None,
+    encoding: str = DEFAULT_ENCODING,
 ) -> Profile:
     """Read a CSV file from ``path`` and profile it.
 
@@ -516,35 +555,37 @@ def profile_file(
     auto-detection (comma/semicolon/tab/pipe). ``limit`` optionally samples only
     the first N data rows.
 
-    Raises ``ProfileError`` when the bytes are not UTF-8, or when the CSV module
-    refuses the input (an unterminated quote, or a field past its size limit).
+    ``encoding`` defaults to ``utf-8-sig``: plain UTF-8, with an Excel byte order
+    mark tolerated. Pass ``cp1252`` or ``latin-1`` for the exports that are not
+    UTF-8 at all.
+
+    Raises ``ProfileError`` when the bytes are not the given encoding, when that
+    encoding is not a codec Python knows, or when the CSV module refuses the
+    input (an unterminated quote, for instance).
     """
+    try:
+        codecs.lookup(encoding)
+    except LookupError as exc:
+        raise ProfileError(f"unknown encoding {encoding!r}") from exc
+
     if path == "-":
         # stdin is not seekable, so read it whole and profile the buffer. The
         # decode consumes a UTF-8 BOM the same way ``utf-8-sig`` does for a file.
         raw = sys.stdin.buffer.read()
         try:
-            text = raw.decode("utf-8-sig")
+            text = raw.decode(encoding)
         except UnicodeDecodeError as exc:
-            bad = exc.object[exc.start]
-            raise ProfileError(
-                f"standard input is not UTF-8 text (byte 0x{bad:02x} is not valid "
-                "there); convert it to UTF-8 first"
-            ) from exc
+            raise ProfileError(_decode_advice("standard input", exc)) from exc
         try:
             return _profile_stream(io.StringIO(text, newline=""), delimiter, top_n, limit, select)
         except csv.Error as exc:
             raise ProfileError(f"standard input could not be parsed as CSV: {exc}") from exc
 
     try:
-        with open(path, newline="", encoding="utf-8-sig") as fh:
+        with open(path, newline="", encoding=encoding) as fh:
             return _profile_stream(fh, delimiter, top_n, limit, select)
     except UnicodeDecodeError as exc:
-        bad = exc.object[exc.start]
-        raise ProfileError(
-            f"{path} is not UTF-8 text (byte 0x{bad:02x} is not valid there); "
-            "convert it to UTF-8 first"
-        ) from exc
+        raise ProfileError(_decode_advice(path, exc)) from exc
     except csv.Error as exc:
         # The reader is consumed inside the ``with``, so its errors surface here.
         raise ProfileError(f"{path} could not be parsed as CSV: {exc}") from exc

@@ -66,6 +66,7 @@ csvpeek data.csv --no-color      # plain text
 | `-c`, `--columns A,B,C` | Profile only these columns, comma-separated, in the order given |
 | `--format {table,md,json}` | Output format: `table` (default), `md` (Markdown), or `json` |
 | `--json` | Shortcut for `--format json` |
+| `--encoding ENC` | Input text encoding (default `utf-8-sig`); try `cp1252` or `latin-1` |
 | `--no-color` | Disable colored output |
 | `-V`, `--version` | Print version |
 
