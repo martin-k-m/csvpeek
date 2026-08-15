@@ -125,11 +125,8 @@ def _sparkline(counts: list[int], bars: str) -> str:
     return "".join(bars[round(c / top * last)] for c in counts)
 
 
-# How much of one value the table and the Markdown output will print. A cell can
-# legitimately hold an embedded document or a base64 blob, and printing one in
-# full turns a profile meant to be read at a glance into a screenful of a single
-# value. The JSON output is not clipped: that one is for a program, which wants
-# the value it asked for.
+# How much of one value the table and Markdown output print. JSON is not clipped:
+# that output is for a program, which wants the value it asked for.
 _MAX_VALUE_WIDTH = 60
 
 

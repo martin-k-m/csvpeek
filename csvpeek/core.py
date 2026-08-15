@@ -18,20 +18,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Optional, TextIO, Union
 
-# The csv module's default field limit is 128 KB. It exists so an unterminated
-# quote cannot pull a whole file into one field, not as a statement about how
-# large a legitimate cell is: one embedded JSON document, log line, or base64
-# blob passes it, and profiling would refuse the file rather than describe it.
-# Raised to 10 MB, which is past any cell a person meant to write and still far
-# short of letting one bad quote swallow a large file. Deliberately not
-# ``sys.maxsize``: the limit is stored as a C long, 32-bit on Windows, which
-# rejects anything larger, and a limit that admits everything is not a limit.
+# The stdlib default of 128 KB rejects real cells. Not ``sys.maxsize``: the limit
+# is a C long, 32-bit on Windows, and it still has to stop a runaway quote.
 MAX_FIELD_SIZE = 10 * 1024 * 1024
 csv.field_size_limit(MAX_FIELD_SIZE)
 
-# The default input encoding. ``utf-8-sig`` reads plain UTF-8 unchanged and also
-# consumes the byte order mark Excel writes, which would otherwise attach itself
-# to the first column's name.
+# Reads plain UTF-8 unchanged and consumes Excel's byte order mark, which would
+# otherwise attach itself to the first column's name.
 DEFAULT_ENCODING = "utf-8-sig"
 
 # Version of the JSON payload produced by ``Profile.to_dict``. Bumped whenever a
@@ -523,16 +516,8 @@ def _profile_stream(
 
 
 def _decode_advice(what: str, exc: UnicodeDecodeError) -> str:
-    """The message for a file whose bytes are not the encoding we read it as.
-
-    "Convert it to UTF-8 first" was the old advice, and it asks the person with
-    the CSV to go find another tool before they can use this one. The encodings
-    named here are the two that a spreadsheet export is when it is not UTF-8, so
-    the next command to type is in the message.
-    """
+    """The message for a file whose bytes are not the encoding we read it as."""
     bad = exc.object[exc.start]
-    # Upper-cased so the codec's own lowercase name reads as the encoding a
-    # person would write down: "is not UTF-8 text", not "is not utf-8 text".
     return (
         f"{what} is not {exc.encoding.upper()} text (byte 0x{bad:02x} at position "
         f"{exc.start} is not valid there); try --encoding cp1252 or "

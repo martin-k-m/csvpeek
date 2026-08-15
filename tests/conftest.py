@@ -9,11 +9,8 @@ import pytest
 def squeezed_field_limit():
     """Lower the csv field size limit for one test, and yield the new value.
 
-    The oversized-field tests build a field one character past the limit. Read
-    against the real limit that is a ten megabyte string written to disk three
-    times over, which is a slow way to prove a fast thing. Squeezing the limit
-    proves exactly the same behaviour with a fifty character field, and restores
-    the real limit afterwards so no other test inherits the squeeze.
+    Lets the oversized-field tests provoke the error with a fifty character
+    field instead of a ten megabyte one.
     """
     small = 50
     previous = csv.field_size_limit(small)

@@ -264,8 +264,6 @@ def test_stdin_exits_zero_end_to_end(monkeypatch, capsys):
 
 
 def test_a_non_utf8_file_names_the_flag_that_reads_it(tmp_path):
-    # "Convert it to UTF-8 first" sent the person with the CSV to go find
-    # another tool. The message now ends with the command that works.
     p = tmp_path / "latin.csv"
     p.write_bytes("name,city\nJos\xe9,M\xe1laga\n".encode("cp1252"))
     with pytest.raises(ProfileError, match="--encoding cp1252"):
@@ -305,9 +303,6 @@ def test_stdin_honours_the_encoding_argument(monkeypatch):
 
 
 def test_a_cell_past_the_stdlib_default_is_profiled_not_refused(tmp_path):
-    # The stdlib's 128 KB default guards against a runaway quote; it is not a
-    # claim about how large a real cell is. One embedded JSON document or base64
-    # blob passes it, and refusing to profile the file is the wrong answer.
     p = tmp_path / "big.csv"
     blob = "x" * 200_000
     p.write_text("a,b\n" + blob + ",1\n", encoding="utf-8", newline="")
@@ -323,9 +318,6 @@ def test_the_raised_field_limit_is_still_a_limit():
 
 
 def test_a_very_long_value_is_clipped_in_the_table_not_in_the_json(tmp_path, capsys):
-    # A cell can hold an embedded document. Printing one in full turns a profile
-    # meant to be read at a glance into a screenful of one value; the JSON is
-    # for a program and keeps the value whole.
     blob = "x" * 5000
     p = tmp_path / "blob.csv"
     p.write_text("a,b\n" + blob + ",1\n", encoding="utf-8", newline="")
