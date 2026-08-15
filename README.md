@@ -119,6 +119,17 @@ pip install pytest .
 pytest -q
 ```
 
+## Related
+
+Four small tools that each do one thing to a table of data:
+
+- **csvpeek** profiles a file: column types, null counts, distributions.
+- [sift](https://github.com/martin-k-m/sift) queries one: filter, sort,
+  aggregate, streaming.
+- [drift](https://github.com/martin-k-m/drift) diffs two of them, in Rust.
+- [quarry](https://github.com/martin-k-m/quarry) is the long way round, a
+  hand-written SQL parser and executor meant to be read.
+
 ## License
 
 MIT © Martin Muskov
