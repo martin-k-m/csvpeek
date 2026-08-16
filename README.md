@@ -66,6 +66,7 @@ csvpeek data.csv --no-color      # plain text
 | `-c`, `--columns A,B,C` | Profile only these columns, comma-separated, in the order given |
 | `--format {table,md,json}` | Output format: `table` (default), `md` (Markdown), or `json` |
 | `--json` | Shortcut for `--format json` |
+| `--encoding ENC` | Input text encoding (default `utf-8-sig`); try `cp1252` or `latin-1` |
 | `--no-color` | Disable colored output |
 | `-V`, `--version` | Print version |
 
@@ -117,6 +118,17 @@ profile.to_dict()   # JSON-ready
 pip install pytest .
 pytest -q
 ```
+
+## Related
+
+Four small tools that each do one thing to a table of data:
+
+- **csvpeek** profiles a file: column types, null counts, distributions.
+- [sift](https://github.com/martin-k-m/sift) queries one: filter, sort,
+  aggregate, streaming.
+- [drift](https://github.com/martin-k-m/drift) diffs two of them, in Rust.
+- [quarry](https://github.com/martin-k-m/quarry) is the long way round, a
+  hand-written SQL parser and executor meant to be read.
 
 ## License
 

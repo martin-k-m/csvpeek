@@ -34,3 +34,29 @@ csvpeek = "csvpeek.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["csvpeek"]
+
+[tool.ruff]
+# Pinned rather than inferred. Python 3.9 is a supported target, not an
+# aspiration, and this is the line that keeps a lint run from recommending
+# syntax the floor cannot parse.
+target-version = "py39"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    # `X | None` in an annotation is legal on 3.9 only because every module here
+    # imports `annotations` from `__future__`, which turns annotations into
+    # strings that are never evaluated. That is a fragile reason to write syntax
+    # the floor cannot parse: the day one annotation is needed at runtime, or
+    # one module loses the future import, 3.9 stops working. `Optional[X]` is
+    # correct on every supported version without that caveat.
+    "UP007",
+    "UP045",
+    # `×` and `·` are the table's own glyphs, chosen on purpose and swapped for
+    # ASCII when the output stream cannot encode them. Flagging them as
+    # confusable with `x` and `|` is the rule doing its job on the wrong file.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]

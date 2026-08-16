@@ -14,6 +14,7 @@ import pytest
 
 from csvpeek.cli import main
 from csvpeek.core import (
+    MAX_FIELD_SIZE,
     ProfileError,
     infer_type,
     near_miss,
@@ -21,7 +22,6 @@ from csvpeek.core import (
     profile_rows,
     sniff_delimiter,
 )
-
 
 # --- input parsing ----------------------------------------------------------
 
@@ -247,8 +247,8 @@ def test_stdin_non_utf8_raises_profile_error(monkeypatch):
         profile_file("-")
 
 
-def test_stdin_bad_csv_raises_profile_error(monkeypatch):
-    _feed_stdin(monkeypatch, b"a,b\n" + b"x" * (csv.field_size_limit() + 1) + b",1\n")
+def test_stdin_bad_csv_raises_profile_error(monkeypatch, squeezed_field_limit):
+    _feed_stdin(monkeypatch, b"a,b\n" + b"x" * (squeezed_field_limit + 1) + b",1\n")
     with pytest.raises(ProfileError, match="standard input could not be parsed as CSV"):
         profile_file("-")
 
@@ -258,3 +258,75 @@ def test_stdin_exits_zero_end_to_end(monkeypatch, capsys):
     assert main(["-", "--no-color"]) == 0
     out = capsys.readouterr().out
     assert "3 rows" in out
+
+
+# --- encodings that are not UTF-8, and cells larger than the stdlib default ---
+
+
+def test_a_non_utf8_file_names_the_flag_that_reads_it(tmp_path):
+    p = tmp_path / "latin.csv"
+    p.write_bytes("name,city\nJos\xe9,M\xe1laga\n".encode("cp1252"))
+    with pytest.raises(ProfileError, match="--encoding cp1252"):
+        profile_file(str(p))
+
+
+def test_the_encoding_argument_reads_a_cp1252_file(tmp_path):
+    p = tmp_path / "latin.csv"
+    p.write_bytes("name,city\nJos\xe9,M\xe1laga\n".encode("cp1252"))
+    profile = profile_file(str(p), encoding="cp1252")
+    assert profile.rows == 1
+    assert [c.name for c in profile.columns] == ["name", "city"]
+    assert profile.columns[0].top == [("Jos\xe9", 1)]
+
+
+def test_the_encoding_argument_reaches_the_cli(tmp_path, capsys):
+    p = tmp_path / "latin.csv"
+    p.write_bytes("name,city\nJos\xe9,M\xe1laga\n".encode("cp1252"))
+    assert main([str(p), "--encoding", "cp1252", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["rows"] == 1
+
+
+def test_an_unknown_encoding_is_reported_not_raised_raw(tmp_path, capsys):
+    p = tmp_path / "a.csv"
+    p.write_text("a\n1\n", encoding="utf-8")
+    with pytest.raises(ProfileError, match="unknown encoding"):
+        profile_file(str(p), encoding="no-such-codec")
+    assert main([str(p), "--encoding", "no-such-codec"]) == 3
+    assert "unknown encoding" in capsys.readouterr().err
+
+
+def test_stdin_honours_the_encoding_argument(monkeypatch):
+    _feed_stdin(monkeypatch, "name\nJos\xe9\n".encode("cp1252"))
+    profile = profile_file("-", encoding="cp1252")
+    assert profile.columns[0].top == [("Jos\xe9", 1)]
+
+
+def test_a_cell_past_the_stdlib_default_is_profiled_not_refused(tmp_path):
+    p = tmp_path / "big.csv"
+    blob = "x" * 200_000
+    p.write_text("a,b\n" + blob + ",1\n", encoding="utf-8", newline="")
+    profile = profile_file(str(p))
+    assert profile.rows == 1
+    assert profile.columns[0].top == [(blob, 1)]
+
+
+def test_the_raised_field_limit_is_still_a_limit():
+    # A limit that admits everything is not a limit.
+    assert csv.field_size_limit() == MAX_FIELD_SIZE
+    assert MAX_FIELD_SIZE < 2 ** 31 - 1
+
+
+def test_a_very_long_value_is_clipped_in_the_table_not_in_the_json(tmp_path, capsys):
+    blob = "x" * 5000
+    p = tmp_path / "blob.csv"
+    p.write_text("a,b\n" + blob + ",1\n", encoding="utf-8", newline="")
+
+    assert main([str(p), "--no-color"]) == 0
+    table = capsys.readouterr().out
+    assert blob not in table
+    assert max(len(line) for line in table.splitlines()) < 200
+
+    assert main([str(p), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["columns"][0]["top"][0]["value"] == blob

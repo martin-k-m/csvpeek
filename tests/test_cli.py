@@ -1,4 +1,3 @@
-import csv
 import io
 import json
 import sys
@@ -150,9 +149,9 @@ def test_non_utf8_file_exits_3(capsys, tmp_path):
     assert "0xe9" in err
 
 
-def test_oversized_field_exits_3(capsys, tmp_path):
+def test_oversized_field_exits_3(capsys, tmp_path, squeezed_field_limit):
     path = tmp_path / "big.csv"
-    path.write_text("a,b\n" + "x" * (csv.field_size_limit() + 1) + ",1\n", encoding="utf-8")
+    path.write_text("a,b\n" + "x" * (squeezed_field_limit + 1) + ",1\n", encoding="utf-8")
 
     assert main([str(path)]) == 3
     err = capsys.readouterr().err
@@ -197,7 +196,8 @@ def test_the_capped_marker_has_an_ascii_form():
     from csvpeek.cli import ASCII_GLYPHS, _column_summary
     from csvpeek.core import profile_rows
 
-    col = profile_rows(["v"], [[str(i)] for i in range(6)] + [["a"], ["b"], ["c"], ["d"]]).columns[0]
+    rows = [[str(i)] for i in range(6)] + [["a"], ["b"], ["c"], ["d"]]
+    col = profile_rows(["v"], rows).columns[0]
     line = _column_summary(col, ASCII_GLYPHS)
     assert "..." in line
     assert "…" not in line

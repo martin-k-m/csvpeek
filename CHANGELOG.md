@@ -5,7 +5,30 @@ All notable changes to csvpeek are documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+- A cell larger than 128 KB no longer stops the run. The standard library's
+  field size limit guards against an unterminated quote pulling a whole file
+  into one field; it is not a claim about how large a real cell is, and one
+  embedded JSON document or base64 blob passed it. Raised to 10 MB, which is
+  still a bound and not a removal.
+- A file that is not UTF-8 used to end with "convert it to UTF-8 first", which
+  sends the person holding the CSV to find another tool before they can use this
+  one. The message now names `--encoding` and the two values worth trying, and
+  reports the position of the offending byte as well as the byte.
+- A very long value no longer floods the table. Values are clipped to 60
+  characters for the table and Markdown output, marked with an ellipsis when
+  they are. `--json` is unchanged and still carries the whole value, because
+  that output is for a program rather than for a glance.
+
 ### Added
+- `--encoding`, for the spreadsheet exports that are cp1252 or latin-1 rather
+  than UTF-8. Defaults to `utf-8-sig`, which is the previous behaviour exactly:
+  plain UTF-8, with an Excel byte order mark tolerated. It applies to standard
+  input as well as to a file, and an unknown codec name is reported as such
+  instead of raising.
+- A `ruff` lint job in CI, pinned to `target-version = "py39"`. The test matrix
+  already proved 3.9 runs the code; this is what stops a lint run recommending
+  syntax the floor cannot parse.
 - **A numeric histogram** for every `int` and `float` column: the values bucketed
   into ten evenly spaced bins, or one bin when they are all identical. The table
   and Markdown output render it as a sparkline after `sd`; `--json` reports the

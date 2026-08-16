@@ -23,7 +23,6 @@ from csvpeek.core import (
     profile_rows,
 )
 
-
 # --- histogram binning ------------------------------------------------------
 
 

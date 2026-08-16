@@ -35,8 +35,11 @@ python -m csvpeek examples/people.csv
 
 1. Add or update tests next to the behaviour you're changing: `tests/test_core.py`
    for profiling logic, `tests/test_cli.py` for rendering and argument handling.
-2. Run `pytest -q` locally. CI runs the same suite on Python 3.9–3.12 plus a CLI
-   smoke test, so a green local run usually means a green PR.
+2. Run `pytest -q` and `ruff check .` locally. CI runs the same suite on Python
+   3.9–3.12 plus a CLI smoke test and the same lint job, so a green local run
+   usually means a green PR. Ruff is pinned to `target-version = "py39"`, which
+   is what keeps the 3.9 floor a checked fact rather than a claim in the
+   metadata: it will not suggest 3.10+ syntax, and flags it if it appears.
 3. Note user-visible changes in `CHANGELOG.md` under `[Unreleased]`.
 4. Open a pull request describing what changed and why.
 

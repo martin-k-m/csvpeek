@@ -8,7 +8,7 @@ import sys
 from typing import NamedTuple, Optional, TextIO
 
 from . import __version__
-from .core import ColumnProfile, Profile, ProfileError, profile_file
+from .core import DEFAULT_ENCODING, ColumnProfile, Profile, ProfileError, profile_file
 
 # ANSI helpers (disabled when not a TTY or --no-color)
 _ACCENT = "\033[38;5;99m"
@@ -125,6 +125,18 @@ def _sparkline(counts: list[int], bars: str) -> str:
     return "".join(bars[round(c / top * last)] for c in counts)
 
 
+# How much of one value the table and Markdown output print. JSON is not clipped:
+# that output is for a program, which wants the value it asked for.
+_MAX_VALUE_WIDTH = 60
+
+
+def _clip(value: str, glyphs: Glyphs) -> str:
+    """Shorten one value for display, marking it when it was shortened."""
+    if len(value) <= _MAX_VALUE_WIDTH:
+        return value
+    return value[:_MAX_VALUE_WIDTH] + glyphs.ellipsis
+
+
 def _column_summary(col: ColumnProfile, glyphs: Glyphs = UNICODE_GLYPHS) -> str:
     """The one-line, color-free summary for a column (shared by all renderers)."""
     if col.dtype in ("int", "float"):
@@ -142,7 +154,7 @@ def _column_summary(col: ColumnProfile, glyphs: Glyphs = UNICODE_GLYPHS) -> str:
             parts.append(f"hist {_sparkline(col.histogram.counts, glyphs.bars)}")
         return sep.join(parts)
     if col.top:
-        summary = ", ".join(f"{v} ({n})" for v, n in col.top)
+        summary = ", ".join(f"{_clip(v, glyphs)} ({n})" for v, n in col.top)
         note = _near_miss_note(col, glyphs)
         return summary + note if note else summary
     return "(empty)"
@@ -161,7 +173,7 @@ def _near_miss_note(col: ColumnProfile, glyphs: Glyphs) -> str:
     if not col.mostly:
         return ""
     missed = col.count - col.mostly_count
-    shown = ", ".join(f'"{v}"' for v, _ in col.outliers)
+    shown = ", ".join(f'"{_clip(v, glyphs)}"' for v, _ in col.outliers)
     tail = f" {glyphs.dot} mostly {col.mostly}, {missed} not: {shown}"
     # The list is capped, so say when it is: a truncated list that looks
     # complete is worse than no list.
@@ -228,7 +240,8 @@ def render_markdown(profile: Profile, glyphs: Glyphs = UNICODE_GLYPHS) -> str:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="csvpeek",
-        description="Profile a CSV file from the terminal: types, nulls, and stats. Zero dependencies.",
+        description="Profile a CSV file from the terminal: types, nulls, and stats. "
+                    "Zero dependencies.",
     )
     p.add_argument("file", help="path to a CSV file, or - to read from standard input")
     p.add_argument("-d", "--delimiter", default=None,
@@ -242,6 +255,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--format", choices=["table", "md", "json"], default="table",
                    help="output format: table (default), md (Markdown), or json")
     p.add_argument("--json", action="store_true", help="shortcut for --format json")
+    p.add_argument("--encoding", default=DEFAULT_ENCODING, metavar="ENC",
+                   help="input text encoding (default: %(default)s, which is UTF-8 with "
+                        "an Excel byte order mark tolerated); try cp1252 or latin-1")
     p.add_argument("--no-color", action="store_true", help="disable colored output")
     p.add_argument("-V", "--version", action="version", version=f"csvpeek {__version__}")
     return p
@@ -263,7 +279,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         profile = profile_file(
-            args.file, delimiter=args.delimiter, top_n=args.top, limit=args.limit, select=select
+            args.file, delimiter=args.delimiter, top_n=args.top, limit=args.limit,
+            select=select, encoding=args.encoding,
         )
     except FileNotFoundError:
         return _fail(f"file not found: {args.file}", _EXIT_BAD_INPUT)

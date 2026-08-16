@@ -22,6 +22,7 @@ installation.
 | `-c`, `--columns A,B,C` | all | Profile only these columns, comma-separated, in the order given |
 | `--format {table,md,json}` | `table` | Output format |
 | `--json` | off | Shortcut for `--format json` |
+| `--encoding ENC` | `utf-8-sig` | Input text encoding. The default is UTF-8 with an Excel byte order mark tolerated |
 | `--no-color` | off | Disable ANSI colour |
 | `-V`, `--version` | | Print the version and exit |
 | `-h`, `--help` | | Print usage and exit |
@@ -95,6 +96,18 @@ answer is no. A cp1252 console, which is the Windows default without
 Markdown file written there is ASCII rather than mojibake. Set `PYTHONUTF8=1` or
 `PYTHONIOENCODING=utf-8` to keep the original characters.
 
+`--encoding` controls how the input bytes are read, which is separate from what
+the output stream can print. It defaults to `utf-8-sig`: plain UTF-8, with the
+byte order mark Excel writes tolerated so it does not attach itself to the first
+column name. For a spreadsheet export that is cp1252 or latin-1, pass
+`--encoding cp1252` or `--encoding latin-1`; the error message says so when the
+default cannot read the file.
+
+A value longer than 60 characters is clipped in the `table` and `md` output and
+marked with an ellipsis, so one cell holding an embedded document does not fill
+the screen. `--json` is not clipped: it carries the whole value, because that
+output is for a program.
+
 Values and column names come from the file and can be anything. Those the stream
 cannot encode are escaped as `\uXXXX` instead of ending the run, so the value is
 still visible even on a console that cannot draw it. `json` output is ASCII-only
@@ -129,9 +142,14 @@ should be complete has gone sparse.
 
 Exit `3` covers these cases, each reported on stderr with the reason:
 
-- the bytes are not UTF-8, for example a spreadsheet saved as cp1252
-- Python's CSV reader refuses the file, most often a field past its 131072-byte
-  size limit
+- the bytes are not the encoding they were read as. The default is `utf-8-sig`,
+  so a spreadsheet saved as cp1252 lands here; the message names `--encoding` as
+  the way through, and `--encoding cp1252` reads the same file with exit `0`
+- `--encoding` was given a name Python has no codec for
+- Python's CSV reader refuses the file, most often an unterminated quote. The
+  field size limit is raised from the standard library default of 131072 bytes to
+  10 MB, so a cell holding an embedded document or a base64 blob profiles
+  normally; past 10 MB it is treated as a runaway quote
 - a numeric column contains a value that is not finite, such as `inf` or an
   integer too large to hold as a float
 - a numeric column is finite but cannot be summarised: values near the top of the

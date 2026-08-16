@@ -184,9 +184,9 @@ def test_non_utf8_file_raises_profile_error(tmp_path):
         profile_file(str(p))
 
 
-def test_oversized_field_raises_profile_error(tmp_path):
+def test_oversized_field_raises_profile_error(tmp_path, squeezed_field_limit):
     p = tmp_path / "big.csv"
-    p.write_text("a,b\n" + "x" * (csv.field_size_limit() + 1) + ",1\n", encoding="utf-8")
+    p.write_text("a,b\n" + "x" * (squeezed_field_limit + 1) + ",1\n", encoding="utf-8")
     with pytest.raises(ProfileError, match="field larger than field limit"):
         profile_file(str(p))
 
@@ -224,7 +224,7 @@ def test_finite_values_with_infinite_spread_are_rejected():
     # infinity and the finiteness check rejects it; on 3.10 and earlier the same
     # input raises OverflowError inside quantiles first. Both are ProfileError
     # and both exit 3, which is the contract that matters.
-    with pytest.raises(ProfileError, match="not a finite number|too large to summarise"):
+    with pytest.raises(ProfileError, match=r"not a finite number|too large to summarise"):
         profile_rows(["v"], [["1e308"], ["-1e308"]])
 
 
