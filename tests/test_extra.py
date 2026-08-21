@@ -305,7 +305,9 @@ def test_stdin_honours_the_encoding_argument(monkeypatch):
 def test_a_cell_past_the_stdlib_default_is_profiled_not_refused(tmp_path):
     p = tmp_path / "big.csv"
     blob = "x" * 200_000
-    p.write_text("a,b\n" + blob + ",1\n", encoding="utf-8", newline="")
+    # Path.write_text gained newline= in 3.10; the support floor is 3.9.
+    with open(p, "w", newline="", encoding="utf-8") as fh:
+        fh.write("a,b\n" + blob + ",1\n")
     profile = profile_file(str(p))
     assert profile.rows == 1
     assert profile.columns[0].top == [(blob, 1)]
@@ -320,7 +322,9 @@ def test_the_raised_field_limit_is_still_a_limit():
 def test_a_very_long_value_is_clipped_in_the_table_not_in_the_json(tmp_path, capsys):
     blob = "x" * 5000
     p = tmp_path / "blob.csv"
-    p.write_text("a,b\n" + blob + ",1\n", encoding="utf-8", newline="")
+    # Path.write_text gained newline= in 3.10; the support floor is 3.9.
+    with open(p, "w", newline="", encoding="utf-8") as fh:
+        fh.write("a,b\n" + blob + ",1\n")
 
     assert main([str(p), "--no-color"]) == 0
     table = capsys.readouterr().out
