@@ -11,7 +11,7 @@ from .core import (
     profile_rows,
 )
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __all__ = [
     "DEFAULT_ENCODING",
     "SCHEMA_VERSION",

@@ -5,6 +5,8 @@ All notable changes to csvpeek are documented here. This project follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-21
+
 ### Fixed
 - A cell larger than 128 KB no longer stops the run. The standard library's
   field size limit guards against an unterminated quote pulling a whole file
@@ -49,6 +51,10 @@ All notable changes to csvpeek are documented here. This project follows
   test is pinned to bash for a consistent redirect across runners.
 
 ## [1.1.0] - 2026-08-06
+
+Tagged but never published. The `v1.1.0` tag reached the remote without
+triggering `release.yml`, so no run exists for it and PyPI went from 1.0.0
+straight to 1.2.0. The change below shipped in 1.2.0.
 
 ### Changed
 
