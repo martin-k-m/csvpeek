@@ -30,7 +30,9 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install pytest .
+          # The test tools come from pyproject.toml's dev group, so this file
+          # and that one cannot drift apart. `--group` needs pip 25.1.
+          python -m pip install --group dev .
       - name: Run tests
         run: pytest -q
       - name: Smoke test CLI
@@ -48,7 +50,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install ruff
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install --group dev
       # The test matrix proves 3.9 still runs the code. This proves nobody is
       # being told to write syntax it cannot parse: pyproject.toml pins
       # `target-version = "py39"`, so ruff will not suggest a 3.10+ rewrite and

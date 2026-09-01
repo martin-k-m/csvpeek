@@ -114,8 +114,18 @@ profile.to_dict()   # JSON-ready
 
 ## Development
 
+The test and lint tools are the `dev` group in `pyproject.toml`, which is the
+one list CI installs from too.
+
 ```sh
-pip install pytest .
+uv sync --group dev
+uv run pytest -q
+```
+
+or with pip, which needs 25.1 or newer for `--group`:
+
+```sh
+python -m pip install --group dev .
 pytest -q
 ```
 
