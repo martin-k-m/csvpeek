@@ -5,6 +5,13 @@ All notable changes to csvpeek are documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+- The terminal table now stays aligned when a column has nulls. A null count
+  with its percentage, `1 (16.7%)`, is wider than the fixed seven-character
+  nulls column, so it pushed that row's unique count and summary out of line
+  with every other row, including in the README's own example. The nulls and
+  unique columns are now sized to their widest cell.
+
 ## [1.2.0] - 2026-08-21
 
 ### Fixed
