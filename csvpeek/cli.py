@@ -195,7 +195,18 @@ def render(profile: Profile, use_color: bool, glyphs: Glyphs = UNICODE_GLYPHS) -
     name_w = max((len(col.name) for col in profile.columns), default=4)
     name_w = max(name_w, 6)
 
-    header = f"  {'column'.ljust(name_w)}  {'type':<7} {'nulls':>7} {'unique':>7}  summary"
+    # Sized to the widest cell, not fixed: a null count with its percentage,
+    # "1 (16.7%)", is wider than the header and used to push every column
+    # after it out of line.
+    nulls_w = max((len(_nulls_cell(col)) for col in profile.columns), default=0)
+    nulls_w = max(nulls_w, 7)
+    unique_w = max((len(str(col.unique)) for col in profile.columns), default=0)
+    unique_w = max(unique_w, 7)
+
+    header = (
+        f"  {'column'.ljust(name_w)}  {'type':<7} "
+        f"{'nulls':>{nulls_w}} {'unique':>{unique_w}}  summary"
+    )
     out.append(c(header, _DIM))
     out.append(c("  " + glyphs.rule * (len(header) - 2), _DIM))
 
@@ -205,7 +216,7 @@ def render(profile: Profile, use_color: bool, glyphs: Glyphs = UNICODE_GLYPHS) -
             summary = c(summary, _DIM)
         line = (
             f"  {c(col.name.ljust(name_w), _ACCENT)}  "
-            f"{col.dtype:<7} {_nulls_cell(col):>7} {col.unique:>7}  {summary}"
+            f"{col.dtype:<7} {_nulls_cell(col):>{nulls_w}} {col.unique:>{unique_w}}  {summary}"
         )
         out.append(line)
 

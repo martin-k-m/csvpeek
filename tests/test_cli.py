@@ -4,7 +4,7 @@ import sys
 
 import pytest
 
-from csvpeek.cli import main, render_markdown
+from csvpeek.cli import main, render, render_markdown
 from csvpeek.core import profile_rows
 
 
@@ -201,3 +201,15 @@ def test_the_capped_marker_has_an_ascii_form():
     line = _column_summary(col, ASCII_GLYPHS)
     assert "..." in line
     assert "…" not in line
+
+
+def test_render_keeps_columns_aligned_when_a_null_count_is_wide():
+    # "1 (33.3%)" is wider than the "nulls" header. With a fixed width it
+    # pushed the unique count of that row two places right of every other.
+    prof = profile_rows(["a", "b"], [["1", "x"], ["", "y"], ["3", "z"]])
+    lines = render(prof, use_color=False).splitlines()
+    table = [line for line in lines if line.startswith("  ") and line.strip()][1:]
+    header, rows = table[0], table[2:]
+    end = header.index("unique") + len("unique")
+    for row in rows:
+        assert row[end - 1] != " " and row[end] == " ", row
