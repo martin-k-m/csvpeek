@@ -16,7 +16,15 @@ jobs:
         # current release there to hold the job count down.
         os: [ubuntu-latest]
         python-version: ["3.9", "3.10", "3.11", "3.12"]
+        # ubuntu-latest is 26.04, which actions/python-versions has no 3.9
+        # build for, so the floor runs on 24.04. Dropping the job instead would
+        # leave the 3.9 claim in pyproject.toml tested on Windows alone.
+        exclude:
+          - os: ubuntu-latest
+            python-version: "3.9"
         include:
+          - os: ubuntu-24.04
+            python-version: "3.9"
           - os: windows-latest
             python-version: "3.9"
           - os: windows-latest
